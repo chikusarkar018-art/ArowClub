@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <!-- Card Base Yellow Gradient -->
+    <linearGradient id="walletBgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF59D" />
+      <stop offset="20%" stop-color="#FFD600" />
+      <stop offset="70%" stop-color="#FFC107" />
+      <stop offset="100%" stop-color="#FF8F00" />
+    </linearGradient>
+
+    <!-- Outer Gold Gloss Rim -->
+    <linearGradient id="walletBorderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFF8D" />
+      <stop offset="50%" stop-color="#FFE082" />
+      <stop offset="100%" stop-color="#FFA000" />
+    </linearGradient>
+
+    <!-- Inner Highlight Rim -->
+    <linearGradient id="walletInnerRim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFDE7" stop-opacity="0.9" />
+      <stop offset="60%" stop-color="#FFF59D" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#FFB300" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Top Left Glass Sheen / Gloss Reflection -->
+    <linearGradient id="glassGloss" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.75" />
+      <stop offset="40%" stop-color="#FFF9C4" stop-opacity="0.3" />
+      <stop offset="70%" stop-color="#FFF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Card Frame -->
+  <rect
+    x="2"
+    y="2"
+    width="596"
+    height="236"
+    rx="28"
+    fill="url(#walletBgGrad)"
+    stroke="url(#walletBorderGrad)"
+    stroke-width="4"
+  />
+
+  <!-- Inner Inset Gold Border -->
+  <rect
+    x="12"
+    y="12"
+    width="576"
+    height="216"
+    rx="20"
+    fill="none"
+    stroke="url(#walletInnerRim)"
+    stroke-width="2"
+  />
+
+  <!-- Top Curved Glass Gloss Reflection (as seen in the 3rd image) -->
+  <path
+    d="M 14,32 C 14,20 24,14 36,14 L 420,14 C 340,60 180,110 14,120 Z"
+    fill="url(#glassGloss)"
+  />
+
+  <!-- Secondary subtle wave reflection -->
+  <path
+    d="M 280,14 C 420,14 560,30 584,80 C 480,120 360,125 240,115 C 260,70 270,35 280,14 Z"
+    fill="url(#glassGloss)"
+    opacity="0.4"
+  />
+</svg>

@@ -1,0 +1,8 @@
+{
+  "name": "arowclub",
+  "description": "AROWCLUB is a modern, secure and user-friendly gaming platform designed with a premium black and gold experience. Explore exciting games, enjoy exclusive promotions, unlock VIP rewards and manage your wallet easily from one place.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <!-- Ticket Body Gradient matching user image -->
+    <linearGradient id="ticketGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFEA00" />
+      <stop offset="25%" stop-color="#FFD600" />
+      <stop offset="70%" stop-color="#FFB300" />
+      <stop offset="100%" stop-color="#FF8F00" />
+    </linearGradient>
+
+    <!-- Outer Yellow Glowing Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFF8D" />
+      <stop offset="50%" stop-color="#FFE082" />
+      <stop offset="100%" stop-color="#FFA000" />
+    </linearGradient>
+
+    <!-- Road-like Center Dashed Line Color with slight glow -->
+    <linearGradient id="roadLineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFDE7" />
+      <stop offset="50%" stop-color="#FFF59D" />
+      <stop offset="100%" stop-color="#FFE082" />
+    </linearGradient>
+  </defs>
+
+  <!-- 
+    Ticket Path:
+    - Subtle top and bottom center semicircle cuts (reduced cut size)
+    - Corner radius: 20
+    - Center X=300: Notch from X=288 to X=312 with R=12
+  -->
+  <path
+    d="
+      M 24,4
+      H 288
+      A 12,12 0 0,0 312,4
+      H 576
+      A 20,20 0 0,1 596,24
+      V 176
+      A 20,20 0 0,1 576,196
+      H 312
+      A 12,12 0 0,0 288,196
+      H 24
+      A 20,20 0 0,1 4,176
+      V 24
+      A 20,20 0 0,1 24,4
+      Z
+    "
+    fill="url(#ticketGrad)"
+    stroke="url(#borderGrad)"
+    stroke-width="3"
+    stroke-linejoin="round"
+  />
+
+  <!-- Road-like Center Dashed Line between Top and Bottom Notches -->
+  <line
+    x1="300"
+    y1="22"
+    x2="300"
+    y2="178"
+    stroke="url(#roadLineGrad)"
+    stroke-width="4.5"
+    stroke-dasharray="10,7"
+    stroke-linecap="round"
+    opacity="0.95"
+  />
+</svg>

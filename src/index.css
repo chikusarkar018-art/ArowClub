@@ -1,0 +1,436 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body, #root {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    position: relative;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    background-color: #ffffff;
+    color: #0f172a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: normal;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.light body,
+  html.theme-light body,
+  body.light-mode {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  html.dark body,
+  html.theme-dark body,
+  body.dark-mode {
+    background-color: #060709 !important;
+    color: #f4f4f5 !important;
+  }
+
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+}
+
+/* ================= COMPREHENSIVE LIGHT MODE SUPPORT FOR ADMIN PANEL ================= */
+html.light,
+html.theme-light,
+body.light-mode {
+  --admin-bg-base: #f1f5f9;
+  --admin-card-bg: #ffffff;
+  --admin-border-subtle: #e2e8f0;
+  --admin-text-title: #0f172a;
+  --admin-text-sub: #475569;
+}
+
+html.light .admin-layout-root,
+html.theme-light .admin-layout-root {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light aside,
+html.theme-light aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light header,
+html.theme-light header {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.light main,
+html.theme-light main {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light footer,
+html.theme-light footer {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #64748b !important;
+}
+
+/* Admin dark surface overrides when in light mode */
+html.light .bg-\[\#0b0c10\],
+html.theme-light .bg-\[\#0b0c10\],
+html.light .bg-\[\#0d0e15\],
+html.theme-light .bg-\[\#0d0e15\],
+html.light .bg-\[\#0d0f17\],
+html.theme-light .bg-\[\#0d0f17\],
+html.light .bg-\[\#121420\],
+html.theme-light .bg-\[\#121420\],
+html.light .bg-\[\#121422\],
+html.theme-light .bg-\[\#121422\],
+html.light .bg-\[\#131522\],
+html.theme-light .bg-\[\#131522\],
+html.light .bg-\[\#151726\],
+html.theme-light .bg-\[\#151726\],
+html.light .bg-\[\#1a1d2e\],
+html.theme-light .bg-\[\#1a1d2e\],
+html.light .bg-\[\#1a1d2f\],
+html.theme-light .bg-\[\#1a1d2f\],
+html.light .bg-\[\#181a29\],
+html.theme-light .bg-\[\#181a29\],
+html.light .bg-\[\#0e111d\],
+html.theme-light .bg-\[\#0e111d\],
+html.light .bg-\[\#0f111a\],
+html.theme-light .bg-\[\#0f111a\],
+html.light .bg-\[\#0b0d18\],
+html.theme-light .bg-\[\#0b0d18\],
+html.light .bg-\[\#141624\],
+html.theme-light .bg-\[\#141624\],
+html.light .bg-\[\#161828\],
+html.theme-light .bg-\[\#161828\],
+html.light .bg-\[\#10121f\],
+html.theme-light .bg-\[\#10121f\],
+html.light .bg-\[\#0a0c16\],
+html.theme-light .bg-\[\#0a0c16\],
+html.light .bg-\[\#11131f\],
+html.theme-light .bg-\[\#11131f\],
+html.light .bg-\[\#151828\],
+html.theme-light .bg-\[\#151828\] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light .border-\[\#1e202e\],
+html.theme-light .border-\[\#1e202e\],
+html.light .border-\[\#23273c\],
+html.theme-light .border-\[\#23273c\],
+html.light .border-\[\#262a42\],
+html.theme-light .border-\[\#262a42\],
+html.light .border-\[\#2b304c\],
+html.theme-light .border-\[\#2b304c\],
+html.light .border-\[\#212d42\],
+html.theme-light .border-\[\#212d42\],
+html.light .border-\[\#333a56\],
+html.theme-light .border-\[\#333a56\],
+html.light .border-white\/10,
+html.theme-light .border-white\/10,
+html.light .border-white\/5,
+html.theme-light .border-white\/5,
+html.light .border-slate-800,
+html.theme-light .border-slate-800 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+html.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+html.light select,
+html.theme-light select,
+html.light textarea,
+html.theme-light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input::placeholder,
+html.theme-light input::placeholder,
+html.light textarea::placeholder,
+html.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.light .text-slate-200,
+html.theme-light .text-slate-200,
+html.light .text-slate-300,
+html.theme-light .text-slate-300 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-400,
+html.theme-light .text-slate-400,
+html.light .text-slate-500,
+html.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+html.light table th,
+html.theme-light table th {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light table td,
+html.theme-light table td {
+  border-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light .hover\:bg-\[\#151726\]:hover,
+html.theme-light .hover\:bg-\[\#151726\]:hover,
+html.light .hover\:bg-\[\#1a1e32\]:hover,
+html.theme-light .hover\:bg-\[\#1a1e32\]:hover,
+html.light .hover\:bg-slate-800:hover,
+html.theme-light .hover\:bg-slate-800:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.grid-cols-13 {
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+}
+
+.grid-cols-15 {
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+}
+
+.grid-cols-17 {
+  grid-template-columns: repeat(17, minmax(0, 1fr));
+}
+
+/* Bento custom scrollbars in Luxury Yellow & Black */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08080a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a18;
+  border: 1px solid rgba(245, 196, 67, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #eab308;
+}
+
+/* Chicken Road Crash Screen Shake Animation */
+@keyframes screen-shake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-10px, -8px) rotate(-2deg); }
+  20% { transform: translate(10px, 8px) rotate(2deg); }
+  30% { transform: translate(-9px, 6px) rotate(-1.5deg); }
+  40% { transform: translate(9px, -6px) rotate(1.5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-screen-shake {
+  animation: screen-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* Feather Flying Physics Animations */
+@keyframes feather-fly-top-left {
+  0% { transform: translate(0, 0) scale(0.8) rotate(0deg); opacity: 1; }
+  60% { transform: translate(-60px, -75px) scale(1.4) rotate(-220deg); opacity: 0.95; }
+  100% { transform: translate(-90px, -110px) scale(1.1) rotate(-380deg); opacity: 0; }
+}
+
+@keyframes feather-fly-top-right {
+  0% { transform: translate(0, 0) scale(0.8) rotate(0deg); opacity: 1; }
+  60% { transform: translate(65px, -80px) scale(1.5) rotate(240deg); opacity: 0.95; }
+  100% { transform: translate(95px, -115px) scale(1.2) rotate(420deg); opacity: 0; }
+}
+
+@keyframes feather-fly-top-mid {
+  0% { transform: translate(0, 0) scale(0.6) rotate(0deg); opacity: 1; }
+  60% { transform: translate(5px, -95px) scale(1.5) rotate(180deg); opacity: 0.95; }
+  100% { transform: translate(12px, -135px) scale(1.2) rotate(360deg); opacity: 0; }
+}
+
+@keyframes feather-fly-bottom-left {
+  0% { transform: translate(0, 0) scale(0.8) rotate(0deg); opacity: 1; }
+  60% { transform: translate(-55px, 60px) scale(1.3) rotate(-160deg); opacity: 0.9; }
+  100% { transform: translate(-80px, 90px) scale(1) rotate(-300deg); opacity: 0; }
+}
+
+@keyframes feather-fly-bottom-right {
+  0% { transform: translate(0, 0) scale(0.8) rotate(0deg); opacity: 1; }
+  60% { transform: translate(60px, 65px) scale(1.4) rotate(200deg); opacity: 0.9; }
+  100% { transform: translate(85px, 95px) scale(1) rotate(340deg); opacity: 0; }
+}
+
+@keyframes feather-fly-left {
+  0% { transform: translate(0, 0) scale(0.7) rotate(0deg); opacity: 1; }
+  60% { transform: translate(-80px, -10px) scale(1.3) rotate(-260deg); opacity: 0.9; }
+  100% { transform: translate(-115px, -15px) scale(1) rotate(-400deg); opacity: 0; }
+}
+
+@keyframes feather-fly-right {
+  0% { transform: translate(0, 0) scale(0.7) rotate(0deg); opacity: 1; }
+  60% { transform: translate(80px, -5px) scale(1.3) rotate(270deg); opacity: 0.9; }
+  100% { transform: translate(120px, -8px) scale(1) rotate(450deg); opacity: 0; }
+}
+
+.animate-feather-tl { animation: feather-fly-top-left 1.1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-tr { animation: feather-fly-top-right 1.15s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-top { animation: feather-fly-top-mid 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-bl { animation: feather-fly-bottom-left 1.05s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-br { animation: feather-fly-bottom-right 1.1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-left { animation: feather-fly-left 1.1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+.animate-feather-right { animation: feather-fly-right 1.15s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+
+/* 3D Casino Playing Card Flipping */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Subtle Natural Dealer Idle Movements */
+@keyframes dealer-idle-breathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.004);
+  }
+}
+
+@keyframes dealer-idle-sway {
+  0%, 100% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+  25% {
+    transform: rotate(0.4deg) translate(1px, -1px);
+  }
+  75% {
+    transform: rotate(-0.3deg) translate(-1px, 0);
+  }
+}
+
+@keyframes dealer-natural-blink {
+  0%, 90%, 100% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  92%, 96% {
+    opacity: 0.95;
+    transform: scaleY(1);
+  }
+}
+
+.animate-dealer-breathe {
+  animation: dealer-idle-breathe 4.5s ease-in-out infinite;
+}
+
+.animate-dealer-sway {
+  animation: dealer-idle-sway 9s ease-in-out infinite;
+}
+
+.animate-dealer-blink {
+  animation: dealer-natural-blink 5.5s infinite;
+}
+
+/* Dealing Hand & Card Glide Motion */
+@keyframes dealer-hand-reach-1 {
+  0% {
+    transform: translate(-100px, -90px) rotate(-35deg) scale(0.7);
+    opacity: 0;
+  }
+  35% {
+    transform: translate(-20px, -20px) rotate(-15deg) scale(1);
+    opacity: 1;
+  }
+  65% {
+    transform: translate(0px, 0px) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-40px, -50px) rotate(-20deg) scale(0.85);
+    opacity: 0;
+  }
+}
+
+@keyframes deal-card-slide-1 {
+  0% {
+    transform: translate(-120px, -110px) scale(0.35) rotate(-25deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes deal-card-slide-2 {
+  0% {
+    transform: translate(90px, -110px) scale(0.35) rotate(20deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-deal-card-1 {
+  animation: deal-card-slide-1 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+}
+
+.animate-deal-card-2 {
+  animation: deal-card-slide-2 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+}
+
+@keyframes card-flip-in {
+  0% {
+    transform: rotateY(0deg) scale(1);
+  }
+  50% {
+    transform: rotateY(90deg) scale(1.08) translateY(-6px);
+  }
+  100% {
+    transform: rotateY(180deg) scale(1) translateY(0);
+  }
+}
+
+.animate-card-3d-flip {
+  animation: card-flip-in 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
