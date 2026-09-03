@@ -660,13 +660,19 @@ async function startServer() {
   // ===================== GAME APIS =====================
   app.get('/api/game/current/:gameType', (req, res) => {
     const gameType = req.params.gameType as GameType;
-    const period = db.currentPeriods.get(gameType);
+    let period = db.currentPeriods.get(gameType);
     if (!period) {
       return res.status(404).json({ error: 'Game type not found' });
     }
 
     const now = Date.now();
-    const remainingMs = Math.max(0, period.endTime - now);
+    // If period has elapsed (<= 0), settle immediately and return the fresh new round + updated history instantly
+    if (period.endTime <= now) {
+      gameEngine.settlePeriod(gameType, period);
+      period = db.currentPeriods.get(gameType) || period;
+    }
+
+    const remainingMs = Math.max(0, period.endTime - Date.now());
     const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
     const isLocked = remainingSeconds <= 5;
     const history = (db.resultsHistory.get(gameType) || []).slice(0, 500);

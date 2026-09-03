@@ -285,7 +285,7 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
   };
 
   const cd = formatCountdown(period?.remainingSeconds || 0);
-  const isFinal5Seconds = (period?.remainingSeconds !== undefined && period.remainingSeconds <= 5 && period.remainingSeconds >= 0);
+  const isFinal5Seconds = Boolean(period?.remainingSeconds !== undefined && period.remainingSeconds <= 5 && period.remainingSeconds > 0);
 
   const gameTypes = [
     { type: 'wingo_30s' as GameType, title: 'WinGo 30sec' },

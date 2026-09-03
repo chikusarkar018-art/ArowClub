@@ -102,11 +102,12 @@ export const UserGamePanel: React.FC = () => {
   const [viewPortal, setViewPortal] = useState<boolean>(() => {
     try {
       const hash = window.location.hash;
-      if (hash.includes('portal') || hash.includes('official')) return true;
-      if (hash.includes('register') || hash.includes('login') || initialCode) return false;
-      return false;
+      if (hash.includes('register') || hash.includes('login')) return false;
+      if (initialCode && (hash.includes('register') || window.location.search.includes('invitationCode'))) return false;
+      // When visiting pure root domain (.com) or #/portal, open Official Portal by default
+      return true;
     } catch {
-      return false;
+      return true;
     }
   });
   
@@ -128,7 +129,7 @@ export const UserGamePanel: React.FC = () => {
   });
   const [registeredPhone, setRegisteredPhone] = useState('');
 
-  // Hash listener for direct links like /#/register?invitationCode=... or /#/portal
+  // Hash listener for direct links like /#/register?invitationCode=... or /#/login or root /
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
@@ -142,7 +143,7 @@ export const UserGamePanel: React.FC = () => {
       } else if (hash.includes('login')) {
         setAuthMode('login');
         setViewPortal(false);
-      } else if (hash.includes('portal') || hash.includes('official')) {
+      } else if (hash.includes('portal') || hash.includes('official') || hash === '' || hash === '#' || hash === '#/') {
         setViewPortal(true);
       }
     };
