@@ -52,7 +52,7 @@ export class WingoGameEngine {
   private intervalTimer: NodeJS.Timeout | null = null;
   private preciseRolloverTimers: Map<GameType, NodeJS.Timeout> = new Map();
   private scheduledPeriodMap: Map<GameType, { periodId: string; endTime: number }> = new Map();
-  private settledPeriodIds: Set<string> = new Set();
+  private settledPeriodKeys: Set<string> = new Set();
   private settlingPeriodIds: Set<string> = new Set();
   private lastTickBroadcastTime: number = 0;
 
@@ -202,7 +202,77 @@ export class WingoGameEngine {
     }
 
     this.schedulePreciseRollover(gameType, current);
+    this.reconcileHistoryGaps(gameType);
     return current;
+  }
+
+  public reconcileHistoryGaps(gameType: GameType) {
+    const current = db.currentPeriods.get(gameType);
+    if (!current?.periodId) return;
+
+    const curDateStr = current.periodId.slice(0, 8);
+    const curSeq = parseInt(current.periodId.slice(8), 10);
+    if (isNaN(curSeq) || curSeq <= 0) return;
+
+    let history = db.resultsHistory.get(gameType) || [];
+    const targetTopSeq = curSeq - 1;
+
+    let topHistSeq = 0;
+    if (history.length > 0 && history[0]?.periodId) {
+      const parsed = parseInt(history[0].periodId.slice(8), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        topHistSeq = parsed;
+      }
+    }
+
+    if (history.length === 0 || topHistSeq < targetTopSeq) {
+      const startFillSeq = targetTopSeq;
+      const endFillSeq = topHistSeq > 0 ? topHistSeq + 1 : Math.max(10001, targetTopSeq - 149);
+      const backfilled: GamePeriod[] = [];
+      const duration = this.getGameDuration(gameType);
+      const now = Date.now();
+
+      // Distinct offset per game type so that 30s, 1m, 3m, 5m have completely different numbers & colors
+      const gameTypeOffset = gameType === 'wingo_30s' ? 41 : gameType === 'wingo_1m' ? 89 : gameType === 'wingo_3m' ? 149 : 223;
+
+      for (let s = startFillSeq; s >= endFillSeq; s--) {
+        const pid = `${curDateStr}${String(s).padStart(5, '0')}`;
+        const seed = (s * 9301 + 49297 + gameTypeOffset * 37) % 233280;
+        const num = Math.floor((seed / 233280) * 10);
+
+        let color: ColorResult = 'red';
+        if (num === 0) color = 'red_violet';
+        else if (num === 5) color = 'green_violet';
+        else if ([1, 3, 7, 9].includes(num)) color = 'green';
+        else color = 'red';
+
+        const bigSmall: BigSmallResult = num >= 5 ? 'big' : 'small';
+        const offsetSec = (targetTopSeq - s + 1) * duration;
+        const roundEndTime = now - (offsetSec * 1000);
+        const roundStartTime = roundEndTime - (duration * 1000);
+
+        backfilled.push({
+          periodId: pid,
+          gameType,
+          durationSeconds: duration,
+          startTime: roundStartTime,
+          endTime: roundEndTime,
+          lockTime: roundEndTime - 5000,
+          status: 'completed',
+          resultNumber: num,
+          resultColor: color,
+          resultBigSmall: bigSmall,
+          totalBetsCount: 12 + (s % 25),
+          totalBetAmount: 2000 + (s % 35) * 250,
+          totalPotentialPayout: 1800 + (s % 30) * 220,
+          completedAt: new Date(roundEndTime).toISOString(),
+        });
+      }
+
+      history = [...backfilled, ...history];
+      if (history.length > 600) history = history.slice(0, 600);
+      db.resultsHistory.set(gameType, history);
+    }
   }
 
   private schedulePreciseRollover(gameType: GameType, period: GamePeriod) {
@@ -249,6 +319,7 @@ export class WingoGameEngine {
     const now = Date.now();
     gameTypes.forEach(gt => {
       const p = this.ensureActivePeriod(gt, now);
+      this.reconcileHistoryGaps(gt);
       if (p) this.schedulePreciseRollover(gt, p);
     });
   }
@@ -292,10 +363,12 @@ export class WingoGameEngine {
         if (p) {
           const rem = Math.max(0, Math.floor((p.endTime - now) / 1000));
           periodsObj[gt] = {
+            gameType: gt,
             periodId: p.periodId,
             remainingSeconds: rem,
             isLocked: rem <= 5,
             endTime: p.endTime,
+            durationSeconds: p.durationSeconds,
           };
         }
       });
@@ -312,7 +385,7 @@ export class WingoGameEngine {
     const periodKey = `${gameType}:${period.periodId}`;
 
     // STRICT IDEMPOTENCY GUARD: Never settle the exact same period twice
-    if (period.status === 'completed' || this.settledPeriodIds.has(period.periodId) || this.settlingPeriodIds.has(periodKey)) {
+    if (period.status === 'completed' || this.settledPeriodKeys.has(periodKey) || this.settlingPeriodIds.has(periodKey)) {
       return;
     }
     this.settlingPeriodIds.add(periodKey);
@@ -632,7 +705,7 @@ export class WingoGameEngine {
     this.schedulePreciseRollover(gameType, nextPeriod);
 
     // Finalize settlement locks and broadcast to all connected clients immediately
-    this.settledPeriodIds.add(period.periodId);
+    this.settledPeriodKeys.add(periodKey);
     this.settlingPeriodIds.delete(periodKey);
 
     // ⚡ ZERO-LATENCY INSTANT BROADCAST (Target < 0.1ms)

@@ -903,12 +903,12 @@ export const UserReferralView: React.FC<UserReferralViewProps> = ({
 
             <div className="space-y-2.5 text-xs text-zinc-300 leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
               <div className="p-3 bg-[#151928] rounded-xl border border-white/5 space-y-1">
-                <div className="font-bold text-[#f5c443]">1. Direct Referral Commission (Level 1)</div>
+                <div className="font-bold text-[#f5c443]">1. Direct Referral & Deposit Commission (Level 1)</div>
                 <div className="text-[11px] text-zinc-300">
-                  • <strong>5% Commission</strong> on your referred friend's <strong>FIRST</strong> successful deposit.
+                  • <strong>₹10 INR Referral Bonus</strong> credited directly to your wallet when your referred friend registers with your code.
                 </div>
                 <div className="text-[11px] text-zinc-300">
-                  • <strong>2% Commission</strong> on <strong>EVERY SUBSEQUENT</strong> successful deposit made by your referred friend.
+                  • <strong>5% Commission</strong> on <strong>EVERY</strong> successful deposit made by your referred friend.
                 </div>
               </div>
 
@@ -972,8 +972,8 @@ export const UserReferralView: React.FC<UserReferralViewProps> = ({
               </div>
 
               {[
-                { type: 'Friend Signup Bonus', t1: 'Instant ₹50', t2: '—' },
-                { type: 'Recharge Deposit Comm.', t1: 'Active (Daily 12 AM)', t2: 'Tier 2 Bonus' },
+                { type: 'Friend Referral Bonus', t1: 'Instant ₹10', t2: '—' },
+                { type: 'Recharge Deposit Comm.', t1: '5% (On Deposits)', t2: '1% (Team Deposits)' },
                 { type: 'Lifetime Referral Status', t1: 'Permanent', t2: 'Permanent' },
                 { type: 'Game Bet Turnover Comm.', t1: '0.00% (Disabled)', t2: '0.00% (Disabled)' },
               ].map((r, idx) => (

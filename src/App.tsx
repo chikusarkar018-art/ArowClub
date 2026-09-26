@@ -36,6 +36,7 @@ import { GameControlCenterView } from './components/admin/GameControlCenterView.
 import { VipBonusManagementView } from './components/admin/VipBonusManagementView.js';
 import { PredictionBigSmallView } from './components/admin/PredictionBigSmallView.js';
 import { GiftCodeManagementView } from './components/admin/GiftCodeManagementView.js';
+import { FirstDepositBonusManagementView } from './components/admin/FirstDepositBonusManagementView.js';
 import { AdminGoogleSheetLedgerView } from './components/admin/AdminGoogleSheetLedgerView.js';
 import { UserGamePanel } from './components/user/UserGamePanel.js';
 
@@ -149,6 +150,8 @@ const MainApp: React.FC = () => {
         return <PredictionBigSmallView />;
       case 'vip_bonus_management':
         return <VipBonusManagementView />;
+      case 'first_deposit_bonus_management':
+        return <FirstDepositBonusManagementView />;
       case 'gift_codes':
         return <GiftCodeManagementView />;
       case 'mines_control':

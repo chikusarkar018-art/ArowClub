@@ -207,14 +207,14 @@ export class WingoDatabase {
     {
       id: 'task-invite-friends',
       title: 'Invite 1 Friend Bonus',
-      reward: 50,
-      badge: 'UNLIMITED',
+      reward: 10,
+      badge: 'REFERRAL BONUS',
       badgeColor: 'bg-purple-500',
-      desc: 'Share your referral code. When 1 friend registers and joins, claim your ₹50 reward.',
-      actionLabel: 'Invite & Claim',
+      desc: 'Share your referral code. When 1 friend registers and joins, you get ₹10 directly in your wallet.',
+      actionLabel: 'Invite Friends',
       targetType: 'invite',
       targetValue: 1,
-      isActive: true,
+      isActive: false, // Auto-credited directly to wallet upon client registration (₹10 INR, no extra amounts)
     },
     {
       id: 'task-bet-challenge',
@@ -535,8 +535,9 @@ export class WingoDatabase {
 
   referralSystemSettings: any = {
     signupBonus: 10,
-    referralInviteBonus: 50,
-    depositCommissionPercent: 10,
+    referralInviteBonus: 10,
+    depositCommissionPercent: 5,
+    teamDepositCommissionPercent: 1,
     history: [],
   };
 
@@ -1548,6 +1549,9 @@ export class WingoDatabase {
             ...this.referralSystemSettings,
             ...data.referralSystemSettings,
             signupBonus: 10,
+            referralInviteBonus: 10,
+            depositCommissionPercent: 5,
+            teamDepositCommissionPercent: 1,
           };
           if (data.referralSystemSettings.history && Array.isArray(data.referralSystemSettings.history)) {
             this.referralSystemSettings.history = data.referralSystemSettings.history;
@@ -1883,8 +1887,9 @@ export class WingoDatabase {
           const pid = `${dateStr}${String(targetSeq).padStart(5, '0')}`;
           if (existingIds.has(pid)) continue;
 
-          // Pseudo-random deterministic distribution for numbers 0-9
-          const seed = (targetSeq * 9301 + 49297 + duration) % 233280;
+          // Distinct offset per game type so that 30s, 1m, 3m, 5m have completely different numbers & colors
+          const gtOffset = gt === 'wingo_30s' ? 41 : gt === 'wingo_1m' ? 89 : gt === 'wingo_3m' ? 149 : 223;
+          const seed = (targetSeq * 9301 + 49297 + gtOffset * 37) % 233280;
           const num = Math.floor((seed / 233280) * 10);
 
           let color: ColorResult = 'red';

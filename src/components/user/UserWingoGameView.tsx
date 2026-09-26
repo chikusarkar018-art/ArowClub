@@ -113,19 +113,33 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
     periodRef.current = period;
   }, [period]);
 
-  // Safe setter that guarantees monotonic period progression and prevents stale responses from causing blinks
-  const safeSetPeriod = useCallback((nextPeriod: any) => {
+  // Safe setter that guarantees correct period progression and seamless rollover
+  const safeSetPeriod = useCallback((nextPeriod: any, sourceGameType?: GameType) => {
     if (!nextPeriod || !nextPeriod.periodId) return;
-    setPeriod((currentPeriod: any) => {
-      if (!currentPeriod || !currentPeriod.periodId) {
-        return nextPeriod;
-      }
-      // Never allow a stale/older periodId to overwrite the newer active round
-      if (String(nextPeriod.periodId) < String(currentPeriod.periodId)) {
-        return currentPeriod;
-      }
-      return nextPeriod;
-    });
+    const targetGt = nextPeriod.gameType || sourceGameType || selectedGameTypeRef.current;
+    const enriched = { ...nextPeriod, gameType: targetGt };
+
+    // Always maintain cached state per game type
+    periodsMapRef.current[targetGt] = enriched;
+
+    // Only update active UI state if this period matches the currently selected tab
+    if (targetGt === selectedGameTypeRef.current) {
+      setPeriod((currentPeriod: any) => {
+        if (!currentPeriod || !currentPeriod.periodId) {
+          return enriched;
+        }
+        // Different game type: always accept new game's period
+        if (currentPeriod.gameType && currentPeriod.gameType !== targetGt) {
+          return enriched;
+        }
+        // If incoming period is different, or has a newer endTime, advance immediately!
+        if (enriched.periodId !== currentPeriod.periodId || (enriched.endTime && enriched.endTime > currentPeriod.endTime)) {
+          return enriched;
+        }
+        // Same period: keep remainingSeconds and lock state in sync
+        return { ...currentPeriod, ...enriched };
+      });
+    }
   }, []);
 
   const safeSetPeriodRef = useRef(safeSetPeriod);
@@ -187,7 +201,7 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
             refreshUserRef.current();
           }
           lastKnownPeriodId.current = res.period.periodId;
-          safeSetPeriodRef.current(res.period);
+          safeSetPeriodRef.current(res.period, targetGameType);
           if (res.history) {
             setHistory(res.history);
           }
@@ -261,7 +275,17 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
   };
 
   useEffect(() => {
-    fetchGame(selectedGameType);
+    fetchGame(selectedGameType, true);
+    // Pre-fetch all other WinGo timeframes so switching tabs has instant dedicated cache
+    const allGts: GameType[] = ['wingo_30s', 'wingo_1m', 'wingo_3m', 'wingo_5m'];
+    allGts.forEach((gt) => {
+      if (gt !== selectedGameType) {
+        api.getLiveGame(gt).then((res) => {
+          if (res?.period) periodsMapRef.current[gt] = res.period;
+          if (Array.isArray(res?.history)) historyMapRef.current[gt] = res.history;
+        }).catch(() => {});
+      }
+    });
   }, [selectedGameType, user?.uid]);
 
   // ⚡ INSTANT COUNTDOWN EXPIRY TRIGGER (0.0001 sec)
@@ -311,17 +335,17 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
             serverClockOffsetRef.current = data.serverTime - Date.now();
             if (data.periods) {
               Object.keys(data.periods).forEach(gt => {
-                periodsMapRef.current[gt] = data.periods[gt];
+                periodsMapRef.current[gt] = { ...data.periods[gt], gameType: gt };
               });
               const currentP = data.periods[selectedGameTypeRef.current];
               if (currentP) {
-                safeSetPeriodRef.current(currentP);
+                safeSetPeriodRef.current(currentP, selectedGameTypeRef.current);
               }
             }
           } else if (data.type === 'period_settled') {
             // Update cached state for this gameType
             if (data.nextPeriod) {
-              periodsMapRef.current[data.gameType] = data.nextPeriod;
+              periodsMapRef.current[data.gameType] = { ...data.nextPeriod, gameType: data.gameType };
             }
             const newHistItem: any = {
               periodId: data.periodId,
@@ -369,8 +393,9 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
 
               // 2. Immediately advance to next period
               if (data.nextPeriod) {
-                safeSetPeriodRef.current(data.nextPeriod);
+                safeSetPeriodRef.current(data.nextPeriod, data.gameType);
                 lastKnownPeriodId.current = data.nextPeriod.periodId;
+                expiredHandledPeriodId.current = '';
               }
 
               // 3. ⚡ ZERO-LATENCY INSTANT WINNING POPUP TRIGGER (0.0001 sec)
@@ -1003,12 +1028,16 @@ export const UserWingoGameView: React.FC<UserWingoGameViewProps> = ({
                 onClick={() => {
                   if (selectedGameType !== gt.type) {
                     setSelectedGameType(gt.type);
+                    selectedGameTypeRef.current = gt.type;
+                    expiredHandledPeriodId.current = '';
+                    lastBeepedSec.current = null;
                     if (periodsMapRef.current[gt.type]) {
-                      setPeriod(periodsMapRef.current[gt.type]);
+                      safeSetPeriodRef.current(periodsMapRef.current[gt.type], gt.type);
                     }
-                    if (historyMapRef.current[gt.type]) {
+                    if (historyMapRef.current[gt.type] && historyMapRef.current[gt.type].length > 0) {
                       setHistory(historyMapRef.current[gt.type]);
                     }
+                    fetchGame(gt.type, true);
                   }
                 }}
                 className={`py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center relative transition active:scale-95 ${

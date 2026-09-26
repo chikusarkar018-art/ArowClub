@@ -383,13 +383,16 @@ async function startServer() {
 
       if (referrer && referrer.uid !== user.uid) {
         user.referredBy = referrer.uid;
-        const inviteBonus = Number(db.referralSystemSettings?.referralInviteBonus ?? 50);
+        // Strictly 10 INR referral bonus for client invite, no extra amount
+        const inviteBonus = Number(db.referralSystemSettings?.referralInviteBonus ?? 10);
         if (inviteBonus > 0) {
           referrerUser = referrer;
           const prevRefBal = referrer.walletBalance;
           referrer.walletBalance = Number((referrer.walletBalance + inviteBonus).toFixed(2));
           referrer.requiredTurnover = Number(((referrer.requiredTurnover || 0) + inviteBonus).toFixed(2));
           referrer.remainingTurnover = Number((Math.max(0, referrer.remainingTurnover || 0) + inviteBonus).toFixed(2));
+          referrer.referralEarnings = Number(((referrer.referralEarnings || 0) + inviteBonus).toFixed(2));
+          referrer.invitedUsersCount = (referrer.invitedUsersCount || 0) + 1;
 
           refBonusTx = {
             id: `TX-REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -401,7 +404,7 @@ async function startServer() {
             newBalance: referrer.walletBalance,
             reference: `INVITE-${user.uid}`,
             createdBy: 'system',
-            note: `Referral Invite Bonus for registering player ${user.username} (UID: ${user.uid}) - 1X Turnover Required`,
+            note: `Referral Invite Bonus for registering player ${user.username} (UID: ${user.uid}): ₹${inviteBonus}`,
             createdAt: new Date().toISOString(),
           };
           db.transactions.unshift(refBonusTx);
@@ -957,10 +960,12 @@ async function startServer() {
       if (p) {
         const rem = Math.max(0, Math.floor((p.endTime - now) / 1000));
         periodsSnapshot[gt] = {
+          gameType: gt,
           periodId: p.periodId,
           remainingSeconds: rem,
           isLocked: rem <= 5,
           endTime: p.endTime,
+          durationSeconds: p.durationSeconds,
         };
       }
     });
@@ -1985,17 +1990,14 @@ Assistant Reply:`;
       }
     });
 
-    const depCommPercent = Number(
-      db.referralSystemSettings?.depositCommissionPercent ?? 
-      db.referralSystemSettings?.referralDepositCommissionPercent ?? 
-      5
-    );
+    const depCommPercent = 5;
+    const teamDepCommPercent = 1;
 
-    // 0.6% Bet Commission removed. Only Referral Commission is granted (Subordinate Deposits & Referrals)
+    // Direct deposit commission: strictly 5%; Team deposit commission: strictly 1%
     const directDepositComm = Number(((directDepositAmount * depCommPercent) / 100).toFixed(2));
-    const teamDepositComm = Number(((teamDepositAmount * (depCommPercent / 2)) / 100).toFixed(2));
+    const teamDepositComm = Number(((teamDepositAmount * teamDepCommPercent) / 100).toFixed(2));
 
-    const inviteBonusPerUser = Number(db.referralSystemSettings?.referralInviteBonus ?? 50);
+    const inviteBonusPerUser = Number(db.referralSystemSettings?.referralInviteBonus ?? 10);
     const inviteBonusTotal = directUsers.length * inviteBonusPerUser;
 
     const loggedDepositComms = (db.referralDepositCommissions || [])
@@ -2051,13 +2053,13 @@ Assistant Reply:`;
         depositAmount: teamDepositAmount,
         firstDepositNumber: teamFirstDepositCount,
         turnover: 0,
-        commissionRate: `${(depCommPercent / 2).toFixed(1)}% Team Deposit Commission`,
+        commissionRate: `${teamDepCommPercent}% Team Deposit Commission`,
         users: teamUsers.map(d => ({ uid: d.uid, username: d.username, date: d.registrationDate, totalBet: d.totalBet, status: d.status })),
       },
       rebateRates: [
         { feature: 'Referral Invite Bonus', reward: `₹${inviteBonusPerUser} Per Friend`, note: 'Instant upon registration' },
-        { feature: 'Subordinate Deposit Commission', reward: `${depCommPercent}%`, note: 'On every recharge deposit' },
-        { feature: 'Team Subordinate Deposit', reward: `${(depCommPercent / 2).toFixed(1)}%`, note: 'Tier 2 deposit bonus' },
+        { feature: 'Subordinate Deposit Commission', reward: `${depCommPercent}%`, note: 'On every client recharge deposit' },
+        { feature: 'Team Subordinate Deposit', reward: `${teamDepCommPercent}%`, note: 'Tier 2 team deposit commission' },
         { feature: 'Game Bet Commission', reward: '0.00% (Disabled)', note: 'Bet commission is removed' },
       ],
     });
@@ -2089,16 +2091,13 @@ Assistant Reply:`;
       }
     });
 
-    const depCommPercent = Number(
-      db.referralSystemSettings?.depositCommissionPercent ?? 
-      db.referralSystemSettings?.referralDepositCommissionPercent ?? 
-      5
-    );
+    const depCommPercent = 5;
+    const teamDepCommPercent = 1;
 
     const directDepositComm = Number(((directDepositAmount * depCommPercent) / 100).toFixed(2));
-    const teamDepositComm = Number(((teamDepositAmount * (depCommPercent / 2)) / 100).toFixed(2));
+    const teamDepositComm = Number(((teamDepositAmount * teamDepCommPercent) / 100).toFixed(2));
 
-    const inviteBonusPerUser = Number(db.referralSystemSettings?.referralInviteBonus ?? 50);
+    const inviteBonusPerUser = Number(db.referralSystemSettings?.referralInviteBonus ?? 10);
     const inviteBonusTotal = directUsers.length * inviteBonusPerUser;
 
     const loggedDepositComms = (db.referralDepositCommissions || [])
@@ -2847,9 +2846,10 @@ Assistant Reply:`;
     const { signupBonus, referralInviteBonus, depositCommissionPercent, adminUsername } = req.body;
     db.referralSystemSettings = {
       ...db.referralSystemSettings,
-      signupBonus: Number(signupBonus ?? 50),
-      referralInviteBonus: Number(referralInviteBonus ?? 50),
-      depositCommissionPercent: Number(depositCommissionPercent ?? 10),
+      signupBonus: Number(signupBonus ?? 10),
+      referralInviteBonus: Number(referralInviteBonus ?? 10),
+      depositCommissionPercent: Number(depositCommissionPercent ?? 5),
+      teamDepositCommissionPercent: 1,
     };
     db.saveToDisk();
     logAdminAction(adminUsername || 'SuperAdmin', 'Update Referral Settings', `Updated referral bonuses and commission`, undefined, undefined, undefined, req);
@@ -4508,14 +4508,9 @@ Assistant Reply:`;
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
 
-    // 1. DIRECT REFERRAL (Level 1)
+    // 1. DIRECT REFERRAL (Level 1): strictly 5% commission on client deposits
     if (directReferrer && directReferrer.uid !== user.uid) {
-      // Determine if FIRST successful deposit or SUBSEQUENT deposit
-      const previousL1Comms = db.referralDepositCommissions.filter(
-        r => r.depositorUid === user.uid && r.level === 1 && r.depositId !== depositId
-      );
-      const isFirst = previousL1Comms.length === 0;
-      const l1CommPercent = isFirst ? 5 : 2;
+      const l1CommPercent = 5;
       const l1CommAmount = Number(((depAmount * l1CommPercent) / 100).toFixed(2));
 
       if (l1CommAmount > 0) {

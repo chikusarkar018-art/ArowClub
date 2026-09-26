@@ -163,6 +163,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       badge: null,
     },
     {
+      id: 'first_deposit_bonus_management',
+      label: 'First Deposit Bonus (पहला डिपॉजिट बोनस)',
+      icon: Sparkles,
+      highlight: true,
+      badge: null,
+    },
+    {
       id: 'vip_bonus_management',
       label: 'VIP & Bonus Control',
       icon: Crown,
