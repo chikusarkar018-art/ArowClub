@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <!-- Soft Outer Yellow Glow -->
+    <radialGradient id="actGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#FFD600" stop-opacity="0.9" />
+      <stop offset="85%" stop-color="#FFAB00" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#FF9100" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Top Bezel Gold Gradient -->
+    <linearGradient id="actTopGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF59D" />
+      <stop offset="50%" stop-color="#FFD600" />
+      <stop offset="100%" stop-color="#FFB300" />
+    </linearGradient>
+
+    <!-- Bottom Gloss White Arc Gradient -->
+    <linearGradient id="actBottomWhite" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="70%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#ECEFF1" />
+    </linearGradient>
+
+    <!-- Vibrant Warm Yellow Dial Face -->
+    <radialGradient id="actDialFace" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#FFEB3B" />
+      <stop offset="55%" stop-color="#FFD600" />
+      <stop offset="90%" stop-color="#FFC400" />
+      <stop offset="100%" stop-color="#FFA000" />
+    </radialGradient>
+  </defs>
+
+  <!-- 1. Ambient Glow Halo -->
+  <circle cx="100" cy="100" r="96" fill="url(#actGlow)" />
+
+  <!-- 2. Outer Bezel Full Base Circle (Gold) -->
+  <circle cx="100" cy="100" r="82" fill="url(#actTopGold)" />
+
+  <!-- 3. Bottom White Half Arc on Bezel (From 9 o'clock through 6 o'clock to 3 o'clock) -->
+  <path d="M 22,100 A 78,78 0 0,0 178,100 L 166,100 A 66,66 0 0,1 34,100 Z" fill="url(#actBottomWhite)" />
+
+  <!-- 4. Main Dial Face -->
+  <circle cx="100" cy="100" r="62" fill="url(#actDialFace)" />
+
+  <!-- 5. 12, 3, 6, 9 Pure White Triangular Hour Markers (pointing inward) -->
+  <!-- Top 12 o'clock -->
+  <polygon points="94,40 106,40 100,50" fill="#FFFFFF" />
+  <!-- Bottom 6 o'clock -->
+  <polygon points="94,160 106,160 100,150" fill="#FFFFFF" />
+  <!-- Left 9 o'clock -->
+  <polygon points="40,94 40,106 50,100" fill="#FFFFFF" />
+  <!-- Right 3 o'clock -->
+  <polygon points="160,94 160,106 150,100" fill="#FFFFFF" />
+
+  <!-- 6. Clock Hands -->
+  <!-- Hour hand (10:15 / top-left) -->
+  <line x1="100" y1="100" x2="74" y2="74" stroke="#1A1A1D" stroke-width="10" stroke-linecap="round" />
+  <!-- Minute hand (2:00 / top-right) -->
+  <line x1="100" y1="100" x2="132" y2="68" stroke="#1A1A1D" stroke-width="9" stroke-linecap="round" />
+  <!-- Second hand (6:00 / straight down) -->
+  <line x1="100" y1="96" x2="100" y2="148" stroke="#1A1A1D" stroke-width="3.5" stroke-linecap="round" />
+
+  <!-- 7. Center Pivot Hub (Glossy White with Subtle Ring) -->
+  <circle cx="100" cy="100" r="12" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="1" />
+  <circle cx="100" cy="100" r="7.5" fill="#FFFFFF" stroke="#CCCCCC" stroke-width="0.8" />
+</svg>

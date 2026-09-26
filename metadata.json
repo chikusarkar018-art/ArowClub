@@ -1,0 +1,8 @@
+{
+  "name": "ArowClub",
+  "description": "Imported from GitHub: chikusarkar018-art/ArowClub18",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with balance, turnover, VIP level, referral stats, and status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "phone": { "type": "string" },
+        "walletBalance": { "type": "number" },
+        "totalDeposit": { "type": "number" },
+        "totalWithdrawal": { "type": "number" },
+        "totalBet": { "type": "number" },
+        "totalWin": { "type": "number" },
+        "requiredTurnover": { "type": "number" },
+        "remainingTurnover": { "type": "number" },
+        "vipLevel": { "type": "number" },
+        "referralCode": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "Deposit transaction records with UTR proof and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "utr": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Withdrawal payout requests with bank/UPI details and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "Ledger of all balance credits, debits, bets, wins, and bonuses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "previousBalance": { "type": "number" },
+        "newBalance": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Bet": {
+      "title": "Bet",
+      "description": "Game bets placed across WinGo and casino games",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "gameType": { "type": "string" },
+        "periodId": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "winAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Global casino and merchant configuration documents",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "merchantUpiId": { "type": "string" },
+        "whatsappSupport": { "type": "string" },
+        "telegramSupport": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records and account state"
+    },
+    "/deposits/{depositId}": {
+      "schema": "DepositRequest",
+      "description": "Deposit requests and payment proofs"
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": "WithdrawalRequest",
+      "description": "Withdrawal payout requests"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "WalletTransaction",
+      "description": "Wallet balance transactions ledger"
+    },
+    "/bets/{betId}": {
+      "schema": "Bet",
+      "description": "Bets and game outcomes"
+    },
+    "/arowclub_meta/{docId}": {
+      "schema": "PlatformSettings",
+      "description": "Global platform configurations and metadata backups"
+    }
+  }
+}

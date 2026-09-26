@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Background subtle dark luxury circle -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2030"/>
+      <stop offset="85%" stop-color="#0a0c12"/>
+      <stop offset="100%" stop-color="#05070a"/>
+    </radialGradient>
+
+    <!-- Gold Gradients -->
+    <linearGradient id="goldTop" x1="50" y1="20" x2="200" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fff8d4"/>
+      <stop offset="25%" stop-color="#f5c443"/>
+      <stop offset="65%" stop-color="#d48b0c"/>
+      <stop offset="100%" stop-color="#7a4e05"/>
+    </linearGradient>
+
+    <linearGradient id="goldBevelLeft" x1="40" y1="40" x2="130" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffe899"/>
+      <stop offset="50%" stop-color="#f5b318"/>
+      <stop offset="100%" stop-color="#875806"/>
+    </linearGradient>
+
+    <linearGradient id="goldBevelRight" x1="210" y1="40" x2="130" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e69d10"/>
+      <stop offset="50%" stop-color="#b87405"/>
+      <stop offset="100%" stop-color="#4f2f01"/>
+    </linearGradient>
+
+    <!-- Chrome Silver Swoosh Gradients -->
+    <linearGradient id="silverSwoosh" x1="25" y1="160" x2="230" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b8c6d8"/>
+      <stop offset="30%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#e2e8f0"/>
+      <stop offset="80%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <linearGradient id="silverShadow" x1="40" y1="170" x2="190" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="50%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#f5c443" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded badge -->
+  <rect width="256" height="256" rx="64" fill="url(#bgGrad)"/>
+  <rect width="252" height="252" x="2" y="2" rx="62" fill="none" stroke="#f5c443" stroke-width="3" stroke-opacity="0.35"/>
+
+  <!-- Centered Emblem (scaled 1.1x) -->
+  <g transform="translate(18, 18) scale(1.1)" filter="url(#goldGlow)">
+    <!-- Outer Bevel A Background -->
+    <path
+      d="M100 20 L158 148 L142 165 L108 165 L100 144 L92 165 L58 165 L42 148 Z"
+      fill="url(#goldBevelRight)"
+    />
+
+    <!-- Left Leg of 3D Gold A -->
+    <path
+      d="M100 24 L52 146 L44 162 L66 162 L80 128 L100 78 Z"
+      fill="url(#goldBevelLeft)"
+    />
+
+    <!-- Right Leg of 3D Gold A -->
+    <path
+      d="M100 24 L100 78 L120 128 L134 162 L156 162 L148 146 Z"
+      fill="url(#goldTop)"
+    />
+
+    <!-- Top Facet of A -->
+    <polygon
+      points="100,24 86,58 114,58"
+      fill="#fff8d4"
+    />
+
+    <!-- Inner Cutout Triangle -->
+    <polygon
+      points="100,82 86,122 114,122"
+      fill="#0d1017"
+    />
+
+    <!-- Aerodynamic Silver Swoosh Lower Shadow Edge -->
+    <path
+      d="M34 136 C 45 152, 90 135, 140 82 L168 56 L154 52 C 110 94, 60 142, 34 136 Z"
+      fill="url(#silverShadow)"
+    />
+
+    <!-- Aerodynamic Silver Swoosh Arrow Curved Blade -->
+    <path
+      d="M32 130 C 42 82, 102 68, 166 42 L164 54 C 110 84, 52 108, 32 130 Z"
+      fill="url(#silverSwoosh)"
+    />
+
+    <!-- Silver Arrowhead Tip -->
+    <path
+      d="M166 42 L180 34 L168 58 L160 52 Z"
+      fill="url(#silverSwoosh)"
+      stroke="#ffffff"
+      stroke-width="2"
+    />
+  </g>
+</svg>
