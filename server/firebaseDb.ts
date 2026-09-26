@@ -24,14 +24,14 @@ try {
 
 // Active Firestore configuration for permanent cloud storage
 const ACTIVE_PROJECT_CONFIG = {
-  projectId: "gen-lang-client-0108621154",
-  appId: "1:580119387630:web:b013dd222fcd4df6d082ff",
-  apiKey: "AIzaSyC-e0KEaSpVZmv07e-WDk3fh70XNahhtQI",
-  authDomain: "gen-lang-client-0108621154.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-remixremixremixa-67194161-69e8-4d34-a7d2-af4fa4da58b8",
-  storageBucket: "gen-lang-client-0108621154.firebasestorage.app",
-  messagingSenderId: "580119387630",
-  oAuthClientId: "580119387630-mtadfof9kcc5ora00iup1vklvl16jee0.apps.googleusercontent.com",
+  projectId: "temporal-palace-qr7h4",
+  appId: "1:831206456946:web:6c53265c477bc4bcc38ceb",
+  apiKey: "AIzaSyChcCLdnS4Oe0isJCYO3o5AMI2HKq8KPGk",
+  authDomain: "temporal-palace-qr7h4.firebaseapp.com",
+  firestoreDatabaseId: "ai-studio-arowclub-a3ff0ea2-96ba-4acd-9b05-d1859c1a2721",
+  storageBucket: "temporal-palace-qr7h4.firebasestorage.app",
+  messagingSenderId: "831206456946",
+  oAuthClientId: "831206456946-2trsr5ta23dsof3gembbls9nrokseg3l.apps.googleusercontent.com",
 };
 
 let firebaseConfig: any = { ...ACTIVE_PROJECT_CONFIG };
