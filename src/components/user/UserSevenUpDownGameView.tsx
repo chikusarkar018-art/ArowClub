@@ -234,6 +234,8 @@ export const UserSevenUpDownGameView: React.FC<UserSevenUpDownGameViewProps> = (
   // CONTINUOUS 24/7 SERVER-AUTHORITATIVE LIVE 7 UP DOWN SYNCHRONIZATION
   // ==========================================
   const lastProcessedRoundRef = useRef<number>(0);
+  const settledRoundRef = useRef<number>(0);
+  const dealingStepRef = useRef<number>(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -266,45 +268,97 @@ export const UserSevenUpDownGameView: React.FC<UserSevenUpDownGameViewProps> = (
 
           if (serverPhase === 'betting') {
             setPhase('betting');
+            dealingStepRef.current = 0;
+            setDealingStep(0);
             setCard1(null);
             setCard2(null);
             setTotalResult(null);
-            setDealingStep(0);
             setWinAnnouncement(null);
             setBets({});
+            betsRef.current = {};
             sevenUpDownAudio.playStartChime();
           }
         }
 
         if (serverPhase === 'betting') {
           setPhase('betting');
+          if (dealingStepRef.current !== 0) {
+            dealingStepRef.current = 0;
+            setDealingStep(0);
+            setCard1(null);
+            setCard2(null);
+            setTotalResult(null);
+          }
           if (res.countdown <= 5 && res.countdown > 0) {
             sevenUpDownAudio.playTick();
           }
         } else if (serverPhase === 'dealing') {
           setPhase('dealing');
-          if (res.countdown >= 4) {
-            setDealingStep(1);
-          } else if (res.countdown >= 3) {
-            setDealingStep(2);
-          } else if (res.countdown >= 2) {
-            setDealingStep(3);
-          } else if (res.countdown >= 1) {
-            setDealingStep(4);
+
+          // Ensure cards exist as physical entities so the dealing animations display
+          const d1 = res.dice1 || 3;
+          const d2 = res.dice2 || 4;
+          const cardOne = res.card1 || FULL_DECK.find(c => c.value === d1) || FULL_DECK[0];
+          const cardTwo = res.card2 || FULL_DECK.find(c => c.value === d2) || FULL_DECK[1];
+          setCard1(cardOne);
+          setCard2(cardTwo);
+
+          // Step 1: Card 1 deals from shoe (countdown 6s / 5s)
+          // Step 2: Card 2 deals from shoe (countdown 4s)
+          // Step 3: Card 1 flips over in 3D (countdown 3s)
+          // Step 4: Card 2 flips over in 3D (countdown 2s)
+          // Step 5: Both cards revealed & glowing (countdown 1s)
+          let nextStep = 1;
+          if (res.countdown >= 5) {
+            nextStep = 1;
+          } else if (res.countdown === 4) {
+            nextStep = 2;
+          } else if (res.countdown === 3) {
+            nextStep = 3;
+          } else if (res.countdown === 2) {
+            nextStep = 4;
+          } else if (res.countdown <= 1) {
+            nextStep = 5;
+          }
+
+          if (dealingStepRef.current !== nextStep) {
+            dealingStepRef.current = nextStep;
+            setDealingStep(nextStep);
+            if (nextStep === 1 || nextStep === 2) {
+              sevenUpDownAudio.playCardDeal();
+            } else if (nextStep === 3 || nextStep === 4) {
+              sevenUpDownAudio.playCardFlip();
+            } else if (nextStep === 5) {
+              sevenUpDownAudio.playCardPlace();
+            }
           }
         } else if (serverPhase === 'result') {
           setPhase('result');
-          setDealingStep(5);
+          if (dealingStepRef.current !== 5) {
+            dealingStepRef.current = 5;
+            setDealingStep(5);
+            sevenUpDownAudio.playCardPlace();
+          }
+
           const d1 = res.dice1 || 3;
           const d2 = res.dice2 || 4;
           const s = res.sum || 7;
           const z = res.zone || 'seven';
 
-          const cardOne = FULL_DECK.find(c => c.value === d1) || FULL_DECK[0];
-          const cardTwo = FULL_DECK.find(c => c.value === d2) || FULL_DECK[1];
+          const cardOne = res.card1 || FULL_DECK.find(c => c.value === d1) || FULL_DECK[0];
+          const cardTwo = res.card2 || FULL_DECK.find(c => c.value === d2) || FULL_DECK[1];
           setCard1(cardOne);
           setCard2(cardTwo);
           setTotalResult({ sum: s, zone: z, card1: cardOne, card2: cardTwo });
+
+          if (settledRoundRef.current !== serverRound) {
+            settledRoundRef.current = serverRound;
+            const currentBets = { ...betsRef.current };
+            const totalBet = Object.values(currentBets).reduce((a, b) => a + b, 0);
+            if (totalBet > 0) {
+              evaluateRoundResults(cardOne, cardTwo, s, z, totalBet, currentBets, serverRound, userRef.current);
+            }
+          }
 
           // Authoritative settlement is performed on the server (liveCasinoEngine.settleSevenUpDownRound)
           refreshUser();
@@ -357,62 +411,53 @@ export const UserSevenUpDownGameView: React.FC<UserSevenUpDownGameViewProps> = (
     const winningBetsDetail: string[] = [];
     const recordedBetsList: { label: string; amount: number; rate: number }[] = [];
 
-    // Helper multiplier checker: e.g. ₹100 on 7 Up @ 1.98 rate => ₹198 credited
-    const checkBet = (key: string, rate: number, isWin: boolean, label: string) => {
-      const amount = betsSnapshot[key] || 0;
+    // Helper multiplier checker: e.g. ₹200 on 7 Up @ 1.98 rate => ₹396 credited
+    const checkZone = (keys: string[], rate: number, isWin: boolean, label: string) => {
+      let amount = 0;
+      for (const k of keys) {
+        if (betsSnapshot[k] && betsSnapshot[k] > 0) {
+          amount += betsSnapshot[k];
+        }
+      }
       if (amount > 0) {
         recordedBetsList.push({ label, amount, rate });
-        const win = isWin ? amount * rate : 0;
+        const win = isWin ? parseFloat((amount * rate).toFixed(2)) : 0;
         if (isWin) {
           grossWinning += win;
           winningBetsDetail.push(`${label} (₹${amount} × ${rate} = ₹${win.toFixed(2)})`);
         }
-
-        // Record individual bet on the backend database
-        if (currentUser?.uid) {
-          api.recordGameBet({
-            userId: currentUser.uid,
-            gameType: 'seven_up_down' as any,
-            periodId: `${roundNum}`,
-            unitAmount: amount,
-            multiplier: rate,
-            totalAmount: amount,
-            status: isWin ? 'won' : 'lost',
-            winAmount: isWin ? win : 0,
-          }).catch(e => console.error('Error recording 7up bet:', e));
-        }
       }
     };
 
-    // 1. 7 UP DOWN
-    checkBet('zone_down', 1.98, zone === 'down', '7 Down');
-    checkBet('zone_seven', 12.0, zone === 'seven', 'Exact 7');
-    checkBet('zone_up', 1.98, zone === 'up', '7 Up');
+    // 1. 7 UP DOWN (Strict 1.98x payout for Down & Up, 12x for Seven)
+    checkZone(['zone_down', 'down'], 1.98, zone === 'down', '7 Down (1.98x)');
+    checkZone(['zone_seven', 'seven'], 12.0, zone === 'seven', 'Exact 7 (12x)');
+    checkZone(['zone_up', 'up'], 1.98, zone === 'up', '7 Up (1.98x)');
 
     // 2. ODD - EVEN (Total sum)
-    checkBet('oe_even', 2.10, sum % 2 === 0, 'Even Number');
-    checkBet('oe_odd', 1.80, sum % 2 !== 0, 'Odd Number');
+    checkZone(['oe_even'], 2.10, sum % 2 === 0, 'Even Number (2.10x)');
+    checkZone(['oe_odd'], 1.80, sum % 2 !== 0, 'Odd Number (1.80x)');
 
     // 3. COLOR
-    checkBet('color_red', 1.98, c1.color === 'red' || c2.color === 'red', 'Red Color');
-    checkBet('color_black', 1.98, c1.color === 'black' || c2.color === 'black', 'Black Color');
+    checkZone(['color_red'], 1.98, c1.color === 'red' || c2.color === 'red', 'Red Color (1.98x)');
+    checkZone(['color_black'], 1.98, c1.color === 'black' || c2.color === 'black', 'Black Color (1.98x)');
 
     // 4. SUIT
-    checkBet('suit_spades', 3.75, c1.suit === 'spades' || c2.suit === 'spades', 'Spades ♠');
-    checkBet('suit_hearts', 3.75, c1.suit === 'hearts' || c2.suit === 'hearts', 'Hearts ♥');
-    checkBet('suit_clubs', 3.75, c1.suit === 'clubs' || c2.suit === 'clubs', 'Clubs ♣');
-    checkBet('suit_diamonds', 3.75, c1.suit === 'diamonds' || c2.suit === 'diamonds', 'Diamonds ♦');
+    checkZone(['suit_spades'], 3.75, c1.suit === 'spades' || c2.suit === 'spades', 'Spades ♠ (3.75x)');
+    checkZone(['suit_hearts'], 3.75, c1.suit === 'hearts' || c2.suit === 'hearts', 'Hearts ♥ (3.75x)');
+    checkZone(['suit_clubs'], 3.75, c1.suit === 'clubs' || c2.suit === 'clubs', 'Clubs ♣ (3.75x)');
+    checkZone(['suit_diamonds'], 3.75, c1.suit === 'diamonds' || c2.suit === 'diamonds', 'Diamonds ♦ (3.75x)');
 
     // 5. 3 CARD GROUP
-    checkBet('grp_A23', 4.0, c1.group === 'A23' || c2.group === 'A23', 'Group A-2-3');
-    checkBet('grp_456', 4.0, c1.group === '456' || c2.group === '456', 'Group 4-5-6');
-    checkBet('grp_8910', 4.0, c1.group === '8910' || c2.group === '8910', 'Group 8-9-10');
-    checkBet('grp_JQK', 4.0, c1.group === 'JQK' || c2.group === 'JQK', 'Group J-Q-K');
+    checkZone(['grp_A23'], 4.0, c1.group === 'A23' || c2.group === 'A23', 'Group A-2-3 (4.0x)');
+    checkZone(['grp_456'], 4.0, c1.group === '456' || c2.group === '456', 'Group 4-5-6 (4.0x)');
+    checkZone(['grp_8910'], 4.0, c1.group === '8910' || c2.group === '8910', 'Group 8-9-10 (4.0x)');
+    checkZone(['grp_JQK'], 4.0, c1.group === 'JQK' || c2.group === 'JQK', 'Group J-Q-K (4.0x)');
 
     // 6. EXACT CARD RANK (A to K)
-    checkBet(`card_${c1.rank}`, 13.0, true, `Exact Card ${c1.rank}`);
+    checkZone([`card_${c1.rank}`], 13.0, true, `Exact Card ${c1.rank} (13.0x)`);
     if (c2.rank !== c1.rank) {
-      checkBet(`card_${c2.rank}`, 13.0, true, `Exact Card ${c2.rank}`);
+      checkZone([`card_${c2.rank}`], 13.0, true, `Exact Card ${c2.rank} (13.0x)`);
     }
 
     if (totalBet > 0) {
@@ -493,10 +538,14 @@ export const UserSevenUpDownGameView: React.FC<UserSevenUpDownGameViewProps> = (
     }
 
     sevenUpDownAudio.playChip();
-    setBets((prev) => ({
-      ...prev,
-      [betKey]: (prev[betKey] || 0) + selectedChip,
-    }));
+    setBets((prev) => {
+      const next = {
+        ...prev,
+        [betKey]: (prev[betKey] || 0) + selectedChip,
+      };
+      betsRef.current = next;
+      return next;
+    });
 
     // Map board visual keys to server engine keys:
     const serverKey = betKey === 'zone_down' ? 'down'
@@ -505,8 +554,8 @@ export const UserSevenUpDownGameView: React.FC<UserSevenUpDownGameViewProps> = (
       : betKey;
 
     // Register bet with server live casino engine
-    if (user?.uid && (serverKey === 'down' || serverKey === 'seven' || serverKey === 'up')) {
-      const liveBetPayload = { down: 0, seven: 0, up: 0, [serverKey]: selectedChip };
+    if (user?.uid) {
+      const liveBetPayload = { [serverKey]: selectedChip };
       api.placeSevenUpDownLiveBet(user.uid, liveBetPayload)
         .then((res: any) => {
           if (res && res.success) {

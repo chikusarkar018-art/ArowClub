@@ -326,13 +326,27 @@ export class WingoDatabase {
     },
     seven_up_down: {
       mode: 'auto_managed',
-      houseRTP: 0.90,
+      houseRTP: 0.96,
       targetWinRate: 0.48,
+      downUpMultiplier: 1.98,
+      sevenMultiplier: 12.0,
+      colorMultiplier: 1.98,
+      evenMultiplier: 2.10,
+      oddMultiplier: 1.80,
+      suitMultiplier: 3.75,
+      groupMultiplier: 4.00,
+      cardMultiplier: 13.00,
+      minBet: 10,
+      maxBet: 50000,
     },
     teen_patti: {
       mode: 'auto_managed',
-      houseRTP: 0.90,
+      houseRTP: 0.96,
       targetWinRate: 0.48,
+      mainOdds: 1.98,
+      plusOdds: 4.5,
+      minBet: 10,
+      maxBet: 50000,
     },
     ludo: {
       mode: 'auto_managed',
@@ -1172,7 +1186,7 @@ export class WingoDatabase {
   }
 
   // Check if betting is allowed for user (respects minDepositToBet setting if configured > 0, defaults to 100)
-  public isBettingAllowedForUser(identifierOrUser?: any): { allowed: boolean; message?: string; minDepositRequired: number; currentDeposit: number } {
+  public isBettingAllowedForUser(identifierOrUser?: any, gameType?: string): { allowed: boolean; message?: string; minDepositRequired: number; currentDeposit: number; isGameDisabled?: boolean } {
     const rawSetting = this.platformSettings?.minDepositToBet;
     const minDepositRequired = (rawSetting !== undefined && rawSetting !== null) ? Number(rawSetting) : 100;
     if (!identifierOrUser) {
@@ -1184,6 +1198,23 @@ export class WingoDatabase {
     }
     if (user.status === 'blocked') {
       return { allowed: false, message: 'Your account is blocked. Contact support.', minDepositRequired, currentDeposit: 0 };
+    }
+
+    if (gameType && user.disabledGames && Array.isArray(user.disabledGames)) {
+      const g = String(gameType).toLowerCase();
+      const isBlocked = user.disabledGames.some((dg: string) => {
+        const d = String(dg).toLowerCase();
+        return d === g || (d.includes('seven') && g.includes('seven')) || (d.includes('teen') && g.includes('teen'));
+      });
+      if (isBlocked) {
+        return {
+          allowed: false,
+          message: 'यह गेम एडमिन द्वारा आपके अकाउंट के लिए बंद किया गया है। (Game is disabled for your account by admin)',
+          minDepositRequired,
+          currentDeposit: 0,
+          isGameDisabled: true,
+        };
+      }
     }
 
     const currentDeposit = this.getUserTotalDeposit(user);

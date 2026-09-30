@@ -6,10 +6,27 @@ import {
   Download, Eye, DollarSign, ShieldAlert, CheckCircle2,
   ChevronLeft, ChevronRight, X, Phone, Mail, Calendar, ArrowRight,
   RefreshCw, UserPlus, Sparkles, Key, ArrowDownCircle, ArrowUpCircle,
-  Copy, Check
+  Copy, Check, Gamepad2, Sliders, PlayCircle, BarChart3, TrendingUp, TrendingDown,
+  Info, ShieldCheck, Layers, Coins, Lock, Unlock, AlertTriangle
 } from 'lucide-react';
 import { AdminUserSummary } from '../../types.js';
 import { PaginationControl } from './PaginationControl.js';
+
+export const ALL_AVAILABLE_GAMES = [
+  { key: 'seven_up_down', name: '7 Up 7 Down', tag: 'Live Casino 12x', icon: '♠️', category: 'Casino Table', color: 'from-rose-500/20 to-pink-500/10 border-rose-500/30' },
+  { key: 'teen_patti', name: 'Teen Patti (20-20)', tag: 'Live Dealer', icon: '🃏', category: 'Card Game', color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30' },
+  { key: 'wingo_30s', name: 'Win Go 30 Sec', tag: 'Ultra Turbo', icon: '⚡', category: 'Color Prediction', color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30' },
+  { key: 'wingo_1m', name: 'Win Go 1 Min', tag: 'Most Popular', icon: '⏱️', category: 'Color Prediction', color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30' },
+  { key: 'wingo_3m', name: 'Win Go 3 Min', tag: 'Classic', icon: '⏱️', category: 'Color Prediction', color: 'from-teal-500/20 to-cyan-500/10 border-teal-500/30' },
+  { key: 'wingo_5m', name: 'Win Go 5 Min', tag: 'Standard', icon: '⏱️', category: 'Color Prediction', color: 'from-teal-500/20 to-cyan-500/10 border-teal-500/30' },
+  { key: 'aviator', name: 'Aviator (Crash)', tag: 'Up to 100x', icon: '✈️', category: 'Crash Curve', color: 'from-sky-500/20 to-blue-500/10 border-sky-500/30' },
+  { key: 'mines', name: 'Mines (Diamond Rush)', tag: 'High RTP', icon: '💣', category: 'Grid Cashout', color: 'from-indigo-500/20 to-violet-500/10 border-indigo-500/30' },
+  { key: 'roulette', name: 'European Roulette', tag: '37 Numbers 36x', icon: '🎡', category: 'Casino Wheel', color: 'from-red-500/20 to-amber-500/10 border-red-500/30' },
+  { key: 'chicken_road', name: 'Chicken Road', tag: 'Multiplier Steps', icon: '🐔', category: 'Step Multiplier', color: 'from-orange-500/20 to-amber-500/10 border-orange-500/30' },
+  { key: 'plinko', name: 'Plinko (Lucky Drop)', tag: 'Pinball Pegs', icon: '⚪', category: 'Arcade Drop', color: 'from-purple-500/20 to-pink-500/10 border-purple-500/30' },
+  { key: 'ludo', name: 'Ludo Club', tag: 'Multiplayer Real', icon: '🎲', category: 'Board Game', color: 'from-yellow-500/20 to-amber-500/10 border-yellow-500/30' },
+  { key: 'chess', name: 'Speed Chess', tag: 'Skill 1v1', icon: '♟️', category: 'Strategy Board', color: 'from-zinc-500/20 to-slate-500/10 border-zinc-500/30' },
+];
 
 interface UserManagementViewProps {
   initialStatusFilter?: string;
@@ -67,6 +84,25 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
   const [manualWthNote, setManualWthNote] = useState('Direct Admin Manual Payout');
   const [submittingWth, setSubmittingWth] = useState(false);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+
+  // Exposure & Played Amount Breakdown Modal
+  const [showExposureModal, setShowExposureModal] = useState(false);
+  const [exposureUser, setExposureUser] = useState<AdminUserSummary | null>(null);
+  const [exposureLoading, setExposureLoading] = useState(false);
+  const [exposureData, setExposureData] = useState<any | null>(null);
+
+  // Client Specific Game Control (GC) Modal
+  const [showGameControlModal, setShowGameControlModal] = useState(false);
+  const [gameControlTargetUser, setGameControlTargetUser] = useState<AdminUserSummary | null>(null);
+  const [clientDisabledGames, setClientDisabledGames] = useState<string[]>([]);
+  const [savingGameControl, setSavingGameControl] = useState(false);
+
+  // Client Control / Status & Limits (CC) Modal
+  const [showClientControlModal, setShowClientControlModal] = useState(false);
+  const [clientControlTargetUser, setClientControlTargetUser] = useState<AdminUserSummary | null>(null);
+  const [ccStatus, setCcStatus] = useState<'active' | 'blocked'>('active');
+  const [ccReason, setCcReason] = useState('Admin Review');
+  const [savingCc, setSavingCc] = useState(false);
 
   const fetchUsers = async (silent = false) => {
     try {
@@ -268,6 +304,104 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
     }
   };
 
+  // Open Exposure & Game Breakdown Modal
+  const handleOpenExposureModal = async (u: AdminUserSummary) => {
+    setExposureUser(u);
+    setShowExposureModal(true);
+    setExposureLoading(true);
+    try {
+      const res = await api.getAdminUserExposure(u.uid);
+      setExposureData(res);
+    } catch (err: any) {
+      // Fallback to locally present breakdown if already loaded
+      setExposureData({
+        uid: u.uid,
+        username: u.username,
+        walletBalance: u.walletBalance,
+        exposure: u.exposure !== undefined ? u.exposure : u.activeExposure || 0,
+        activeExposure: u.activeExposure || 0,
+        totalBet: u.totalBet || 0,
+        totalWin: u.totalWin || 0,
+        gameBreakdown: u.gameBreakdown || {},
+        recentBets: [],
+      });
+    } finally {
+      setExposureLoading(false);
+    }
+  };
+
+  // Open Client Game Control Modal (GC)
+  const handleOpenGameControl = (u: AdminUserSummary) => {
+    setGameControlTargetUser(u);
+    setClientDisabledGames(Array.isArray(u.disabledGames) ? [...u.disabledGames] : []);
+    setShowGameControlModal(true);
+  };
+
+  const handleToggleClientGame = (gameKey: string) => {
+    setClientDisabledGames(prev => {
+      if (prev.includes(gameKey)) {
+        return prev.filter(k => k !== gameKey);
+      } else {
+        return [...prev, gameKey];
+      }
+    });
+  };
+
+  const handleAllowAllGames = () => {
+    setClientDisabledGames([]);
+  };
+
+  const handleBlockAllGames = () => {
+    setClientDisabledGames(ALL_AVAILABLE_GAMES.map(g => g.key));
+  };
+
+  const handleSaveClientGameControl = async () => {
+    if (!gameControlTargetUser) return;
+    setSavingGameControl(true);
+    try {
+      const res = await api.updateAdminUserGameControl(
+        gameControlTargetUser.uid,
+        clientDisabledGames,
+        admin?.username || 'SuperAdmin'
+      );
+      showToast(res.message || 'Game control updated successfully!', 'success');
+      setShowGameControlModal(false);
+      setUsers(prev => prev.map(u => u.uid === gameControlTargetUser.uid ? { ...u, disabledGames: clientDisabledGames } : u));
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update game control', 'error');
+    } finally {
+      setSavingGameControl(false);
+    }
+  };
+
+  // Open Client Status & Control Modal (CC)
+  const handleOpenClientControl = (u: AdminUserSummary) => {
+    setClientControlTargetUser(u);
+    setCcStatus(u.status || 'active');
+    setCcReason('Admin Status Adjustment');
+    setShowClientControlModal(true);
+  };
+
+  const handleSaveClientControl = async () => {
+    if (!clientControlTargetUser) return;
+    setSavingCc(true);
+    try {
+      await api.updateUserStatus(
+        clientControlTargetUser.uid,
+        ccStatus,
+        ccReason,
+        admin?.username || 'SuperAdmin'
+      );
+      showToast(`User status updated to ${ccStatus.toUpperCase()}`, 'success');
+      setShowClientControlModal(false);
+      fetchUsers(true);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update status', 'error');
+    } finally {
+      setSavingCc(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -401,15 +535,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                 <th className="pb-3 px-3">Name</th>
                 <th className="pb-3 px-3">Mobile</th>
                 <th className="pb-3 px-3">Balance</th>
-                <th className="pb-3 px-3">Status</th>
+                <th className="pb-3 px-3 text-center">Exposure</th>
+                <th className="pb-3 px-3 text-center">Status</th>
                 <th className="pb-3 px-3">Registered On</th>
-                <th className="pb-3 px-3 text-right">Action</th>
+                <th className="pb-3 px-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e202e]">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     <Users className="w-10 h-10 mx-auto text-slate-600 mb-2" />
                     <p className="font-semibold text-slate-300">No registered users found</p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -455,7 +590,22 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                       <td className="py-3.5 px-3 font-semibold text-amber-400">
                         ₹ {(Number(u.walletBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3.5 px-3">
+                      {/* EXPOSURE (Clickable for full game-by-game breakdown) */}
+                      <td className="py-3.5 px-3 text-center">
+                        <button
+                          onClick={() => handleOpenExposureModal(u)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 hover:border-rose-400 text-rose-400 font-mono font-bold text-xs transition cursor-pointer group shadow-sm"
+                          title="Click to view full game-by-game played amount & turnover breakdown"
+                        >
+                          <span className="group-hover:underline">
+                            (₹ {(Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0)).toFixed(2)})
+                          </span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 font-sans font-semibold">
+                            📊
+                          </span>
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-3 text-center">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
                             !isBlocked
@@ -469,8 +619,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                       <td className="py-3.5 px-3 text-slate-400 text-xs">
                         {displayDate}
                       </td>
-                      <td className="py-3.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                      {/* ACTIONS: Compact Square Badges (U, D|C, W, P, GC, CC) matching Image 2 */}
+                      <td className="py-3.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5 flex-nowrap">
+                          {/* 1. U (User Details) - Orange Square */}
                           <button
                             onClick={() => {
                               if (onViewUserDetails) {
@@ -479,26 +631,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                                 setSelectedUser(u);
                               }
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-[#5b50e6] hover:bg-[#4d42db] text-white text-[11px] font-bold transition shadow-sm"
-                            title="View Full Profile"
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#f97316] hover:bg-[#ea580c] text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                            title="User Details (U)"
                           >
-                            View
+                            U
                           </button>
 
-                          <button
-                            onClick={() => {
-                              setResetTargetUser(u);
-                              setCustomNewPass('Password@123');
-                              setResetSuccessData(null);
-                              setShowResetPassModal(true);
-                            }}
-                            className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[11px] font-bold transition flex items-center gap-1"
-                            title="Reset User Password"
-                          >
-                            <Key className="w-3 h-3" />
-                            <span>Password</span>
-                          </button>
-
+                          {/* 2. D|C (Deposit / Credit) - Green Square */}
                           <button
                             onClick={() => {
                               setManualDepositUser(u);
@@ -506,13 +645,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                               setManualDepUtr(`DEP-${Date.now().toString().slice(-6)}`);
                               setShowManualDepositModal(true);
                             }}
-                            className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition flex items-center gap-1"
-                            title="Manual Deposit for Client"
+                            className="h-7 px-1.5 sm:h-8 sm:px-2 rounded-md bg-[#15803d] hover:bg-[#16a34a] text-white flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer tracking-tighter"
+                            title="Deposit / Credit (D|C)"
                           >
-                            <ArrowDownCircle className="w-3 h-3" />
-                            <span>+ Deposit</span>
+                            <span className="text-[#38bdf8]">D</span>
+                            <span className="text-[#ea580c] mx-0.5">|</span>
+                            <span className="text-[#facc15]">C</span>
                           </button>
 
+                          {/* 3. W (Withdrawal) - Blue Square */}
                           <button
                             onClick={() => {
                               setManualWithdrawUser(u);
@@ -520,24 +661,49 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                               setManualWthUtr(`PAYOUT-${Date.now().toString().slice(-6)}`);
                               setShowManualWithdrawModal(true);
                             }}
-                            className="px-2 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-[11px] font-bold transition flex items-center gap-1"
-                            title="Manual Withdrawal Payout"
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#1d4ed8] hover:bg-[#2563eb] text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Withdrawal (W)"
                           >
-                            <ArrowUpCircle className="w-3 h-3" />
-                            <span>- Withdraw</span>
+                            W
                           </button>
 
+                          {/* 4. P (Password) - Yellow Square */}
                           <button
-                            onClick={() => handleToggleBlock(u)}
-                            className={`px-2 py-1 rounded-lg border text-[11px] font-bold transition flex items-center gap-1 ${
-                              isBlocked
-                                ? 'bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 border-emerald-500/40 shadow-sm'
-                                : 'bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 border-rose-500/40 shadow-sm'
-                            }`}
-                            title={isBlocked ? 'Click to Unblock User' : 'Click to Block User'}
+                            onClick={() => {
+                              setResetTargetUser(u);
+                              setCustomNewPass('Password@123');
+                              setResetSuccessData(null);
+                              setShowResetPassModal(true);
+                            }}
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#facc15] hover:bg-[#eab308] text-black flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Change Password (P)"
                           >
-                            <ShieldAlert className="w-3 h-3" />
-                            <span>{isBlocked ? 'Unblock' : 'Block'}</span>
+                            P
+                          </button>
+
+                          {/* 5. GC (Game Control) - Lilac/Pink Square */}
+                          <button
+                            onClick={() => handleOpenGameControl(u)}
+                            className="h-7 px-1.5 sm:h-8 sm:px-2 rounded-md bg-[#e879f9] hover:bg-[#f472b6] text-black flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer relative"
+                            title="Game Control (GC) - Manage Allowed Games for this Client"
+                          >
+                            <span>GC</span>
+                            {Array.isArray(u.disabledGames) && u.disabledGames.length > 0 && (
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
+                                {u.disabledGames.length}
+                              </span>
+                            )}
+                          </button>
+
+                          {/* 6. CC (Casino Control / Client Status) - Lime Green Square */}
+                          <button
+                            onClick={() => handleOpenClientControl(u)}
+                            className={`h-7 px-1.5 sm:h-8 sm:px-2 rounded-md ${
+                              isBlocked ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-[#4ade80] hover:bg-[#22c55e] text-black'
+                            } flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer`}
+                            title={`Client Status & Control (CC) - Currently ${!isBlocked ? 'Active' : 'Blocked'}`}
+                          >
+                            CC
                           </button>
                         </div>
                       </td>
@@ -1152,6 +1318,529 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
           </div>
         );
       })()}
+
+      {/* ======================================================== */}
+      {/* 1. EXPOSURE & GAME PLAYED BREAKDOWN MODAL               */}
+      {/* ======================================================== */}
+      {showExposureModal && exposureUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-[#121422] border border-[#2b304c] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold text-lg">
+                  📊
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white">Client Exposure & Game Breakdown</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                      UID: {exposureUser.uid}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Player: <strong className="text-slate-200">{exposureUser.username}</strong> | Mobile: <strong className="text-slate-200">{exposureUser.phone || '---'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowExposureModal(false)}
+                className="p-2 rounded-xl bg-[#1e2238] text-slate-400 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              {exposureLoading ? (
+                <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-rose-400" />
+                  <p className="text-sm font-semibold">Calculating game-by-game turnover & exposure...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Top 4 KPI Metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                      <div className="text-[11px] text-slate-400 font-medium">Active Exposure (Open Bets)</div>
+                      <div className="text-lg sm:text-xl font-bold font-mono text-rose-400 mt-1">
+                        (₹ {(Number(exposureData?.activeExposure || exposureUser.exposure || 0)).toFixed(2)})
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Current pending liabilities</div>
+                    </div>
+
+                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                      <div className="text-[11px] text-slate-400 font-medium">Total Game Turnover</div>
+                      <div className="text-lg sm:text-xl font-bold font-mono text-amber-400 mt-1">
+                        ₹ {(Number(exposureData?.totalBet || exposureUser.totalBet || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">All-time stakes played</div>
+                    </div>
+
+                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                      <div className="text-[11px] text-slate-400 font-medium">Total User Winnings</div>
+                      <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400 mt-1">
+                        ₹ {(Number(exposureData?.totalWin || exposureUser.totalWin || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Gross won amount</div>
+                    </div>
+
+                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                      <div className="text-[11px] text-slate-400 font-medium">Player Net P&L</div>
+                      {(() => {
+                        const net = (Number(exposureData?.totalWin || 0)) - (Number(exposureData?.totalBet || 0));
+                        return (
+                          <div className={`text-lg sm:text-xl font-bold font-mono mt-1 ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {net >= 0 ? `+₹ ${net.toFixed(2)}` : `-₹ ${Math.abs(net).toFixed(2)}`}
+                          </div>
+                        );
+                      })()}
+                      <div className="text-[10px] text-slate-500 mt-0.5">Player win vs stake</div>
+                    </div>
+                  </div>
+
+                  {/* Section: Game-by-Game Played Breakdown */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">Played Amount by Game (Kaun Se Game Me Kitna Khela Hai)</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1e2238] text-slate-300">
+                          {ALL_AVAILABLE_GAMES.length} Games Tracked
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowExposureModal(false);
+                          handleOpenGameControl(exposureUser);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[#e879f9]/20 hover:bg-[#e879f9]/30 text-[#e879f9] border border-[#e879f9]/30 font-bold text-xs flex items-center gap-1.5 transition"
+                      >
+                        <span>Manage in GC</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628]">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-[#23273c] text-[11px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
+                            <th className="py-2.5 px-3">Game Name</th>
+                            <th className="py-2.5 px-3">Category</th>
+                            <th className="py-2.5 px-3 text-right">Rounds</th>
+                            <th className="py-2.5 px-3 text-right">Total Bet (Stake)</th>
+                            <th className="py-2.5 px-3 text-right">Total Won</th>
+                            <th className="py-2.5 px-3 text-right">Player Net P&L</th>
+                            <th className="py-2.5 px-3 text-center">GC Access</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1e2238]">
+                          {ALL_AVAILABLE_GAMES.map((game) => {
+                            const bData = exposureData?.gameBreakdown?.[game.key] || { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
+                            const isGameBlocked = Array.isArray(exposureUser.disabledGames) && exposureUser.disabledGames.includes(game.key);
+                            const hasPlayed = bData.totalBet > 0 || bData.rounds > 0;
+
+                            return (
+                              <tr key={game.key} className={`hover:bg-[#181b30] transition ${hasPlayed ? 'bg-[#181a2e]/40 font-medium' : 'opacity-70'}`}>
+                                <td className="py-2.5 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">{game.icon}</span>
+                                    <div>
+                                      <div className="font-bold text-white">{game.name}</div>
+                                      <div className="text-[10px] text-slate-400">{game.tag}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-300">
+                                  <span className="px-2 py-0.5 rounded-md bg-[#1f233b] text-[10px] text-slate-300">
+                                    {game.category}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-slate-200">
+                                  {bData.rounds > 0 ? (
+                                    <span className="font-bold text-white">{bData.rounds}</span>
+                                  ) : (
+                                    <span className="text-slate-500">0</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {bData.totalBet > 0 ? (
+                                    <span className="font-bold text-amber-400">
+                                      ₹ {bData.totalBet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">₹ 0.00</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {bData.totalWin > 0 ? (
+                                    <span className="font-bold text-emerald-400">
+                                      ₹ {bData.totalWin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">₹ 0.00</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {hasPlayed ? (
+                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                      bData.netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                    }`}>
+                                      {bData.netProfit >= 0 ? `+₹${bData.netProfit.toFixed(2)}` : `-₹${Math.abs(bData.netProfit).toFixed(2)}`}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">--</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    !isGameBlocked
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                  }`}>
+                                    {!isGameBlocked ? 'Allowed' : 'Blocked'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Section: Recent Bets Table */}
+                  {Array.isArray(exposureData?.recentBets) && exposureData.recentBets.length > 0 && (
+                    <div>
+                      <div className="text-sm font-bold text-white mb-2">Recent Game Activity Log ({exposureData.recentBets.length} Bets)</div>
+                      <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628] max-h-60">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-[#23273c] text-[10px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
+                              <th className="py-2 px-3">Time</th>
+                              <th className="py-2 px-3">Game</th>
+                              <th className="py-2 px-3">Period / Round</th>
+                              <th className="py-2 px-3 text-right">Stake Amount</th>
+                              <th className="py-2 px-3 text-center">Status</th>
+                              <th className="py-2 px-3 text-right">Win / Payout</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#1e2238] font-mono">
+                            {exposureData.recentBets.slice(0, 15).map((bet: any, bIdx: number) => {
+                              const isWon = bet.status === 'won';
+                              const bDate = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-IN') : '---';
+                              return (
+                                <tr key={bet.id || bIdx} className="hover:bg-[#181b30] transition text-[11px]">
+                                  <td className="py-2 px-3 text-slate-400">{bDate}</td>
+                                  <td className="py-2 px-3 font-sans font-bold text-white capitalize">
+                                    {String(bet.gameType || 'Game').replace(/_/g, ' ')}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-300">#{bet.periodId}</td>
+                                  <td className="py-2 px-3 text-right font-bold text-amber-400">
+                                    ₹ {(Number(bet.totalAmount || bet.amount || 0)).toFixed(2)}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      isWon ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                                    }`}>
+                                      {bet.status?.toUpperCase() || 'COMPLETED'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-bold text-emerald-400">
+                                    {isWon ? `₹ ${(Number(bet.winAmount || 0)).toFixed(2)}` : '₹ 0.00'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
+              <span className="text-xs text-slate-400">
+                Exposure data is computed real-time from settled & active round wagers.
+              </span>
+              <button
+                onClick={() => setShowExposureModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition"
+              >
+                Close Breakdown
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 2. CLIENT GAME CONTROL (GC) MODAL                       */}
+      {/* ======================================================== */}
+      {showGameControlModal && gameControlTargetUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-[#121422] border border-[#2b304c] rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#e879f9]/20 border border-[#e879f9]/30 flex items-center justify-center text-[#e879f9] font-black text-sm">
+                  GC
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white">Client Game Control (GC)</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#e879f9]/15 text-[#e879f9] border border-[#e879f9]/30">
+                      UID: {gameControlTargetUser.uid}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Player: <strong className="text-slate-200">{gameControlTargetUser.username}</strong> | Mobile: <strong className="text-slate-200">{gameControlTargetUser.phone || '---'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowGameControlModal(false)}
+                className="p-2 rounded-xl bg-[#1e2238] text-slate-400 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sub-header Notice & Quick Batch Buttons */}
+            <div className="p-4 bg-[#141628] border-b border-[#23273c] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-slate-300 font-medium">
+                  Select which games this client is allowed to play. When a game is turned <strong className="text-rose-400">OFF (BLOCKED)</strong>, the client cannot enter or place any bets on that game.
+                </p>
+                <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono">
+                  <span className="text-emerald-400 font-bold">
+                    ✓ {ALL_AVAILABLE_GAMES.length - clientDisabledGames.length} Allowed
+                  </span>
+                  <span className="text-rose-400 font-bold">
+                    ✕ {clientDisabledGames.length} Blocked
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAllowAllGames}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Allow All</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBlockAllGames}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Block All</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Games Grid */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-2.5 flex-1 max-h-[55vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {ALL_AVAILABLE_GAMES.map((game) => {
+                  const isBlocked = clientDisabledGames.includes(game.key);
+                  const isAllowed = !isBlocked;
+
+                  return (
+                    <div
+                      key={game.key}
+                      onClick={() => handleToggleClientGame(game.key)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isAllowed
+                          ? 'bg-[#181a2e] border-emerald-500/30 hover:border-emerald-500/60 shadow-sm'
+                          : 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50 opacity-80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-lg flex-shrink-0">
+                          {game.icon}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                            <span>{game.name}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                            <span>{game.category}</span>
+                            <span className="text-zinc-600">•</span>
+                            <span className="text-amber-400/80">{game.tag}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Switch Pill */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleClientGame(game.key);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0 ${
+                          isAllowed
+                            ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:bg-emerald-400'
+                            : 'bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.3)] hover:bg-rose-500'
+                        }`}
+                      >
+                        {isAllowed ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            <span>ALLOWED</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>BLOCKED</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
+              <button
+                type="button"
+                onClick={() => setShowGameControlModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveClientGameControl}
+                disabled={savingGameControl}
+                className="px-6 py-2 rounded-xl bg-[#e879f9] hover:bg-[#d946ef] text-black font-black text-xs shadow-lg transition flex items-center gap-2 disabled:opacity-50"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{savingGameControl ? 'Saving...' : 'Save Game Permissions'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 3. CLIENT STATUS & CONTROL (CC) MODAL                   */}
+      {/* ======================================================== */}
+      {showClientControlModal && clientControlTargetUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-[#121422] border border-[#2b304c] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#4ade80]/20 border border-[#4ade80]/30 flex items-center justify-center text-[#4ade80] font-black text-sm">
+                  CC
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Client Control & Status (CC)</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">UID: {clientControlTargetUser.uid} ({clientControlTargetUser.username})</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowClientControlModal(false)}
+                className="p-2 rounded-xl bg-[#1e2238] text-slate-400 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">Account Access Status</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCcStatus('active')}
+                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition ${
+                      ccStatus === 'active'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold'
+                        : 'bg-[#181a2e] border-[#2b304c] text-slate-400'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>ACTIVE (Allow Login & Bets)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCcStatus('blocked')}
+                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition ${
+                      ccStatus === 'blocked'
+                        ? 'bg-rose-500/20 border-rose-500 text-rose-300 font-bold'
+                        : 'bg-[#181a2e] border-[#2b304c] text-slate-400'
+                    }`}
+                  >
+                    <ShieldAlert className="w-5 h-5" />
+                    <span>BLOCKED (Suspend Account)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Reason / Note for Audit</label>
+                <input
+                  type="text"
+                  value={ccReason}
+                  onChange={(e) => setCcReason(e.target.value)}
+                  placeholder="e.g. Risk check, user requested hold, etc."
+                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="p-3 bg-[#181a2e] rounded-xl border border-[#2b304c] space-y-1.5 text-[11px] text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Current Wallet Balance:</span>
+                  <span className="font-bold text-amber-400 font-mono">₹ {(Number(clientControlTargetUser.walletBalance) || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Current Active Exposure:</span>
+                  <span className="font-bold text-rose-400 font-mono">₹ {(Number(clientControlTargetUser.exposure || 0)).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Blocked Games:</span>
+                  <span className="font-bold text-slate-200">
+                    {Array.isArray(clientControlTargetUser.disabledGames) ? clientControlTargetUser.disabledGames.length : 0} Games
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowClientControlModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveClientControl}
+                  disabled={savingCc}
+                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition shadow-md flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{savingCc ? 'Updating...' : 'Save Account Status'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

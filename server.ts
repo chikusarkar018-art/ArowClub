@@ -806,6 +806,10 @@ async function startServer() {
     const { periodId, gameType, totalAmount, status, winAmount } = req.body;
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes(gameType)) {
+      return res.status(403).json({ error: `This game is currently disabled for your account by Game Control (GC).` });
+    }
+
     // Mandatory rule: User must have deposited at least ₹100 before betting
     if (Number(totalAmount) > 0) {
       const betCheck = db.isBettingAllowedForUser(user);
@@ -986,6 +990,10 @@ async function startServer() {
 
     if (user.status === 'blocked') {
       return res.status(403).json({ error: 'Your account is blocked. Please contact customer support.' });
+    }
+
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes(gameType)) {
+      return res.status(403).json({ error: `This game is currently disabled for your account by Game Control (GC).` });
     }
 
     // Mandatory rule: User must have deposited at least ₹100 before betting
@@ -2907,6 +2915,49 @@ Assistant Reply:`;
   });
 
   // ===================== ANNOUNCEMENT POPUP APIS =====================
+  // Admin File/Image Upload (Base64 / Data URL to local static file or data storage)
+  app.post('/api/admin/upload-image', (req, res) => {
+    try {
+      const { imageData, fileName, folder = 'announcements' } = req.body;
+      if (!imageData) {
+        return res.status(400).json({ error: 'Image data is required' });
+      }
+
+      // Check if data URL
+      const matches = imageData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const ext = matches[1].split('/')[1] || 'png';
+        const buffer = Buffer.from(matches[2], 'base64');
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', folder);
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const safeName = (fileName ? fileName.replace(/[^a-zA-Z0-9._-]/g, '') : `banner_${Date.now()}`) + (fileName && fileName.includes('.') ? '' : `.${ext}`);
+        const filePath = path.join(uploadsDir, safeName);
+        fs.writeFileSync(filePath, buffer);
+        const publicUrl = `/uploads/${folder}/${safeName}`;
+        return res.json({ success: true, url: publicUrl, imageUrl: publicUrl });
+      } else if (imageData.startsWith('http://') || imageData.startsWith('https://') || imageData.startsWith('/')) {
+        return res.json({ success: true, url: imageData, imageUrl: imageData });
+      } else {
+        // Assume direct base64
+        const buffer = Buffer.from(imageData, 'base64');
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', folder);
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const safeName = (fileName ? fileName.replace(/[^a-zA-Z0-9._-]/g, '') : `banner_${Date.now()}`) + '.jpg';
+        const filePath = path.join(uploadsDir, safeName);
+        fs.writeFileSync(filePath, buffer);
+        const publicUrl = `/uploads/${folder}/${safeName}`;
+        return res.json({ success: true, url: publicUrl, imageUrl: publicUrl });
+      }
+    } catch (err: any) {
+      console.error('Upload image error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to upload image' });
+    }
+  });
+
   app.get('/api/announcement-popup', (req, res) => {
     return res.json({
       success: true,
@@ -3563,6 +3614,10 @@ Assistant Reply:`;
     const user = await findAndResolveUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes('aviator')) {
+      return res.status(403).json({ error: 'Aviator is currently disabled for your account by Game Control (GC).' });
+    }
+
     // Mandatory rule: User must have deposited at least ₹100 before betting
     const betCheck = db.isBettingAllowedForUser(user);
     if (!betCheck.allowed) {
@@ -3727,6 +3782,10 @@ Assistant Reply:`;
     const user = await findAndResolveUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes('roulette')) {
+      return res.status(403).json({ error: 'Roulette is currently disabled for your account by Game Control (GC).' });
+    }
+
     // Mandatory rule: User must have deposited at least ₹100 before betting
     const betCheck = db.isBettingAllowedForUser(user);
     if (!betCheck.allowed) {
@@ -3817,6 +3876,10 @@ Assistant Reply:`;
     const user = await findAndResolveUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes('teen_patti')) {
+      return res.status(403).json({ error: 'Teen Patti is currently disabled for your account by Game Control (GC).' });
+    }
+
     // Mandatory rule: User must have deposited at least ₹100 before betting
     const betCheck = db.isBettingAllowedForUser(user);
     if (!betCheck.allowed) {
@@ -3899,6 +3962,10 @@ Assistant Reply:`;
     const user = await findAndResolveUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    if (Array.isArray(user.disabledGames) && user.disabledGames.includes('seven_up_down')) {
+      return res.status(403).json({ error: '7 Up 7 Down is currently disabled for your account by Game Control (GC).' });
+    }
+
     // Mandatory rule: User must have deposited at least ₹100 before betting
     const betCheck = db.isBettingAllowedForUser(user);
     if (!betCheck.allowed) {
@@ -3921,15 +3988,17 @@ Assistant Reply:`;
 
     const existing = liveCasinoEngine.sevenUpDown.activeBets.get(uid);
     if (existing) {
-      for (const [z, amt] of Object.entries(bets as Record<'down' | 'seven' | 'up', number>)) {
-        existing.bets[z] = (existing.bets[z] || 0) + amt;
+      for (const [z, amt] of Object.entries(bets as Record<string, number>)) {
+        if (typeof amt === 'number' && amt > 0) {
+          existing.bets[z] = (existing.bets[z] || 0) + amt;
+        }
       }
       existing.totalAmount += totalAmount;
     } else {
       liveCasinoEngine.sevenUpDown.activeBets.set(uid, {
         id: `7UP-${Date.now()}`,
         userId: uid,
-        bets: { down: bets.down || 0, seven: bets.seven || 0, up: bets.up || 0 },
+        bets: { ...(bets as Record<string, number>) },
         totalAmount,
       });
     }
@@ -4061,6 +4130,56 @@ Assistant Reply:`;
         : 100;
       const isRolloverCompleted = remainingTurnover <= 0;
 
+      // Calculate real active exposure (pending bets) and game breakdown
+      const userBets = (db.bets || []).filter(b => b.uid === u.uid || b.userId === u.uid);
+      const activeExposure = userBets
+        .filter(b => b.status === 'pending')
+        .reduce((sum, b) => sum + Number(b.totalAmount || b.amount || 0), 0);
+
+      const gameBreakdown: Record<string, { totalBet: number; totalWin: number; rounds: number; netProfit: number }> = {
+        seven_up_down: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        teen_patti: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        wingo_30s: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        wingo_1m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        wingo_3m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        wingo_5m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        aviator: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        mines: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        roulette: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        chicken_road: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        plinko: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        ludo: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+        chess: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      };
+
+      for (const b of userBets) {
+        let key = String(b.gameType || 'other').toLowerCase();
+        if (key.includes('seven') || key.includes('7up') || key.includes('7_up')) key = 'seven_up_down';
+        else if (key.includes('teen') || key.includes('patti')) key = 'teen_patti';
+        else if (key.includes('wingo_30') || key === 'wingo_30s') key = 'wingo_30s';
+        else if (key.includes('wingo_1') || key === 'wingo_1m') key = 'wingo_1m';
+        else if (key.includes('wingo_3') || key === 'wingo_3m') key = 'wingo_3m';
+        else if (key.includes('wingo_5') || key === 'wingo_5m') key = 'wingo_5m';
+        else if (key.includes('aviator') || key.includes('crash')) key = 'aviator';
+        else if (key.includes('mines')) key = 'mines';
+        else if (key.includes('roulette')) key = 'roulette';
+        else if (key.includes('chicken')) key = 'chicken_road';
+        else if (key.includes('plinko')) key = 'plinko';
+        else if (key.includes('ludo')) key = 'ludo';
+        else if (key.includes('chess')) key = 'chess';
+        else if (key.includes('wingo')) key = 'wingo_1m';
+
+        if (!gameBreakdown[key]) {
+          gameBreakdown[key] = { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
+        }
+        const bAmt = Number(b.totalAmount || b.amount || 0);
+        const wAmt = b.status === 'won' ? Number(b.winAmount || 0) : 0;
+        gameBreakdown[key].totalBet = parseFloat((gameBreakdown[key].totalBet + bAmt).toFixed(2));
+        gameBreakdown[key].totalWin = parseFloat((gameBreakdown[key].totalWin + wAmt).toFixed(2));
+        gameBreakdown[key].rounds += 1;
+        gameBreakdown[key].netProfit = parseFloat((gameBreakdown[key].totalWin - gameBreakdown[key].totalBet).toFixed(2));
+      }
+
       return {
         ...uVip,
         completedTurnover,
@@ -4068,6 +4187,10 @@ Assistant Reply:`;
         remainingTurnover,
         rolloverProgress,
         isRolloverCompleted,
+        exposure: activeExposure,
+        activeExposure,
+        disabledGames: Array.isArray(u.disabledGames) ? u.disabledGames : [],
+        gameBreakdown,
       };
     });
 
@@ -4086,6 +4209,135 @@ Assistant Reply:`;
     }
 
     return res.json({ users: list });
+  });
+
+  // Client Specific Game Control (Allow / Block specific games for this user)
+  app.post('/api/admin/users/:uid/game-control', async (req, res) => {
+    const { uid } = req.params;
+    const { disabledGames, adminUsername } = req.body;
+    const user = db.getUser(uid);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.disabledGames = Array.isArray(disabledGames) ? disabledGames : [];
+    db.syncUserTurnover(user);
+    await saveUserPermanently(user).catch(() => {});
+    db.saveToDisk();
+
+    return res.json({
+      success: true,
+      message: `Game control updated successfully for ${user.username || user.uid}. (${user.disabledGames.length} games disabled)`,
+      disabledGames: user.disabledGames,
+    });
+  });
+
+  // Client Detailed Exposure & Game Breakdown Route
+  app.get('/api/admin/users/:uid/exposure', (req, res) => {
+    const { uid } = req.params;
+    const user = db.getUser(uid);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const userBets = (db.bets || []).filter(b => b.uid === user.uid || b.userId === user.uid);
+    const activeExposure = userBets
+      .filter(b => b.status === 'pending')
+      .reduce((sum, b) => sum + Number(b.totalAmount || b.amount || 0), 0);
+
+    const gameBreakdown: Record<string, { totalBet: number; totalWin: number; rounds: number; netProfit: number }> = {
+      seven_up_down: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      teen_patti: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      wingo_30s: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      wingo_1m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      wingo_3m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      wingo_5m: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      aviator: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      mines: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      roulette: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      chicken_road: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      plinko: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      ludo: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+      chess: { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 },
+    };
+
+    for (const b of userBets) {
+      let key = String(b.gameType || 'other').toLowerCase();
+      if (key.includes('seven') || key.includes('7up') || key.includes('7_up')) key = 'seven_up_down';
+      else if (key.includes('teen') || key.includes('patti')) key = 'teen_patti';
+      else if (key.includes('wingo_30') || key === 'wingo_30s') key = 'wingo_30s';
+      else if (key.includes('wingo_1') || key === 'wingo_1m') key = 'wingo_1m';
+      else if (key.includes('wingo_3') || key === 'wingo_3m') key = 'wingo_3m';
+      else if (key.includes('wingo_5') || key === 'wingo_5m') key = 'wingo_5m';
+      else if (key.includes('aviator') || key.includes('crash')) key = 'aviator';
+      else if (key.includes('mines')) key = 'mines';
+      else if (key.includes('roulette')) key = 'roulette';
+      else if (key.includes('chicken')) key = 'chicken_road';
+      else if (key.includes('plinko')) key = 'plinko';
+      else if (key.includes('ludo')) key = 'ludo';
+      else if (key.includes('chess')) key = 'chess';
+      else if (key.includes('wingo')) key = 'wingo_1m';
+
+      if (!gameBreakdown[key]) {
+        gameBreakdown[key] = { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
+      }
+      const bAmt = Number(b.totalAmount || b.amount || 0);
+      const wAmt = b.status === 'won' ? Number(b.winAmount || 0) : 0;
+      gameBreakdown[key].totalBet = parseFloat((gameBreakdown[key].totalBet + bAmt).toFixed(2));
+      gameBreakdown[key].totalWin = parseFloat((gameBreakdown[key].totalWin + wAmt).toFixed(2));
+      gameBreakdown[key].rounds += 1;
+      gameBreakdown[key].netProfit = parseFloat((gameBreakdown[key].totalWin - gameBreakdown[key].totalBet).toFixed(2));
+    }
+
+    // Also scan user transactions for any game wins/bets not stored in db.bets
+    const userTxs = (db.transactions || []).filter(t => t.uid === user.uid);
+    for (const tx of userTxs) {
+      const isBet = tx.type === 'bet' && Number(tx.amount) < 0;
+      const isWin = tx.type === 'win' && Number(tx.amount) > 0;
+      if (!isBet && !isWin) continue;
+
+      let key = 'other';
+      const ref = `${tx.reference || ''} ${tx.note || ''}`.toLowerCase();
+      if (ref.includes('seven') || ref.includes('7 up') || ref.includes('7up')) key = 'seven_up_down';
+      else if (ref.includes('teen') || ref.includes('patti')) key = 'teen_patti';
+      else if (ref.includes('wingo_30') || ref.includes('30s') || ref.includes('30 sec')) key = 'wingo_30s';
+      else if (ref.includes('wingo_3') || ref.includes('3 min')) key = 'wingo_3m';
+      else if (ref.includes('wingo_5') || ref.includes('5 min')) key = 'wingo_5m';
+      else if (ref.includes('wingo')) key = 'wingo_1m';
+      else if (ref.includes('aviator') || ref.includes('crash')) key = 'aviator';
+      else if (ref.includes('mines')) key = 'mines';
+      else if (ref.includes('roulette')) key = 'roulette';
+      else if (ref.includes('chicken')) key = 'chicken_road';
+      else if (ref.includes('plinko')) key = 'plinko';
+      else if (ref.includes('ludo')) key = 'ludo';
+      else if (ref.includes('chess')) key = 'chess';
+
+      if (!gameBreakdown[key]) {
+        gameBreakdown[key] = { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
+      }
+
+      // If userBets already has records for this game, avoid double counting
+      if (userBets.length > 0 && gameBreakdown[key].totalBet > 0) continue;
+
+      if (isBet) {
+        const amt = Math.abs(Number(tx.amount || 0));
+        gameBreakdown[key].totalBet = parseFloat((gameBreakdown[key].totalBet + amt).toFixed(2));
+        gameBreakdown[key].rounds += 1;
+      } else if (isWin) {
+        const amt = Math.abs(Number(tx.amount || 0));
+        gameBreakdown[key].totalWin = parseFloat((gameBreakdown[key].totalWin + amt).toFixed(2));
+      }
+      gameBreakdown[key].netProfit = parseFloat((gameBreakdown[key].totalWin - gameBreakdown[key].totalBet).toFixed(2));
+    }
+
+    return res.json({
+      success: true,
+      uid: user.uid,
+      username: user.username,
+      walletBalance: user.walletBalance,
+      exposure: activeExposure,
+      activeExposure,
+      totalBet: user.totalBet || 0,
+      totalWin: user.totalWin || 0,
+      gameBreakdown,
+      recentBets: userBets.slice(0, 30),
+    });
   });
 
   // Admin VIP Level & EXP Manual Adjustment
@@ -4507,6 +4759,7 @@ Assistant Reply:`;
     const directReferrer = resolveReferrer(user.referredBy);
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
+    const isFirst = (db.deposits.filter(d => d.uid === user.uid && d.status === 'approved').length <= 1);
 
     // 1. DIRECT REFERRAL (Level 1): strictly 5% commission on client deposits
     if (directReferrer && directReferrer.uid !== user.uid) {

@@ -92,6 +92,16 @@ export const GameWinningCutSettingsView: React.FC = () => {
       forcedSlotMultiplier: 0.2,
       houseRTP: 0.90,
     },
+    seven_up_down: {
+      mode: 'auto_managed',
+      houseRTP: 0.96,
+      targetWinRate: 0.48,
+      downUpMultiplier: 1.98,
+      sevenMultiplier: 12.0,
+      colorMultiplier: 1.98,
+      evenMultiplier: 2.10,
+      oddMultiplier: 1.80,
+    },
   });
 
   // Active selected tab / game view ('all' or specific game id)
@@ -315,14 +325,37 @@ export const GameWinningCutSettingsView: React.FC = () => {
       tag: 'LIVE DEALER 12X',
       icon: '♠️',
       color: 'from-rose-500/20 to-pink-500/10 border-rose-500/30',
-      desc: 'Live dealer card & dice game (Down 2-6, Lucky 7, Up 8-12).',
+      desc: 'Live dealer card & dice game (Down 2-6 [1.98x], Lucky 7 [12.0x], Up 8-12 [1.98x]).',
       hasModes: true,
-      currentMode: 'house_best',
-      setMode: () => {},
+      currentMode: otherControls?.seven_up_down?.mode || 'auto_managed',
+      setMode: (m: string) => setOtherControls(prev => ({
+        ...prev,
+        seven_up_down: { ...(prev.seven_up_down || {}), mode: m }
+      })),
       modeOptions: [
-        { id: 'house_best', label: '🛡️ House Best (Lowest Payout Card/Dice)', desc: 'Picks lowest payout side' },
-        { id: 'fair', label: '🎲 Fair 52-Deck & Twin Dice RNG', desc: 'Pure random outcome' },
+        { id: 'auto_managed', label: '🤖 Auto Managed (Smart RTP 1.98x)', desc: 'Balances payout based on RTP target' },
+        { id: 'house_best', label: '🛡️ House Best (Lowest Liability)', desc: 'Picks lowest payout side' },
+        { id: 'force_down', label: '⬇️ Force 7 Down (2-6)', desc: 'Guarantees sum < 7 (1.98x)' },
+        { id: 'force_seven', label: '⭐ Force Exact 7 (Lucky 7)', desc: 'Guarantees sum = 7 (12.0x)' },
+        { id: 'force_up', label: '⬆️ Force 7 Up (8-12)', desc: 'Guarantees sum > 7 (1.98x)' },
+        { id: 'fair', label: '🎲 100% Fair RNG', desc: 'Pure random outcome' },
       ],
+      extraControls: (
+        <div className="mt-3 p-3 bg-[#0a0c14] rounded-xl border border-white/5 space-y-2 text-xs">
+          <div className="flex items-center justify-between text-zinc-300">
+            <span>7 Down & 7 Up Payout Multiplier:</span>
+            <span className="font-mono font-bold text-amber-400">
+              {(otherControls?.seven_up_down?.downUpMultiplier || 1.98).toFixed(2)}x
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-300">
+            <span>Exact 7 Multiplier:</span>
+            <span className="font-mono font-bold text-amber-400">
+              {(otherControls?.seven_up_down?.sevenMultiplier || 12.0).toFixed(2)}x
+            </span>
+          </div>
+        </div>
+      ),
     },
     {
       id: 'aviator',

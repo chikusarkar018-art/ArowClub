@@ -231,6 +231,8 @@ export class LiveCasinoEngine {
     dice2: 4,
     sum: 7,
     zone: 'seven' as 'down' | 'seven' | 'up',
+    card1: { rank: '3', suit: 'hearts', suitSymbol: '♥', color: 'red', value: 3, isEven: false, group: 'A23', zone: 'down' } as any,
+    card2: { rank: '4', suit: 'spades', suitSymbol: '♠', color: 'black', value: 4, isEven: true, group: '456', zone: 'down' } as any,
     history: [
       { roundId: 1055, dice1: 4, dice2: 5, sum: 9, zone: 'up' as const, timestamp: Date.now() - 30000 },
       { roundId: 1054, dice1: 1, dice2: 3, sum: 4, zone: 'down' as const, timestamp: Date.now() - 60000 },
@@ -241,7 +243,7 @@ export class LiveCasinoEngine {
     activeBets: new Map<string, {
       id: string;
       userId: string;
-      bets: Record<'down' | 'seven' | 'up', number>;
+      bets: Record<string, number>;
       totalAmount: number;
     }>(),
   };
@@ -796,7 +798,30 @@ export class LiveCasinoEngine {
         let evalA = evaluate3Cards(cA);
         let evalB = evaluate3Cards(cB);
 
-        if (controls.mode === 'auto_managed' && this.teenPatti.activeBets.size > 0) {
+        let targetWinner: 'A' | 'B' | null = null;
+
+        if (controls.mode === 'force_a') {
+          targetWinner = 'A';
+        } else if (controls.mode === 'force_b') {
+          targetWinner = 'B';
+        } else if (controls.mode === 'house_best' && this.teenPatti.activeBets.size > 0) {
+          let betOnA = 0;
+          let betOnB = 0;
+          for (const b of this.teenPatti.activeBets.values()) {
+            if (b.selection === 'A_BACK' || b.selection === 'A_PLUS') betOnA += b.stake;
+            if (b.selection === 'B_BACK' || b.selection === 'B_PLUS') betOnB += b.stake;
+          }
+          // House best: pick the side with least liability so house maximizes profit
+          targetWinner = betOnA <= betOnB ? 'A' : 'B';
+        } else if (controls.mode === 'force_win' && this.teenPatti.activeBets.size > 0) {
+          let betOnA = 0;
+          let betOnB = 0;
+          for (const b of this.teenPatti.activeBets.values()) {
+            if (b.selection === 'A_BACK' || b.selection === 'A_PLUS') betOnA += b.stake;
+            if (b.selection === 'B_BACK' || b.selection === 'B_PLUS') betOnB += b.stake;
+          }
+          targetWinner = betOnA >= betOnB ? 'A' : 'B';
+        } else if (controls.mode === 'auto_managed' && this.teenPatti.activeBets.size > 0) {
           let betOnA = 0;
           let betOnB = 0;
           for (const b of this.teenPatti.activeBets.values()) {
@@ -804,22 +829,22 @@ export class LiveCasinoEngine {
             if (b.selection === 'B_BACK' || b.selection === 'B_PLUS') betOnB += b.stake;
           }
           const shouldPlayerWin = Math.random() < Number(controls.targetWinRate ?? 0.48);
-          let targetWinner: 'A' | 'B' | null = null;
           if (betOnA > betOnB) {
             targetWinner = shouldPlayerWin ? 'A' : 'B';
           } else if (betOnB > betOnA) {
             targetWinner = shouldPlayerWin ? 'B' : 'A';
           }
-          if (targetWinner) {
-            let tries = 0;
-            while (tries < 12 && ((targetWinner === 'A' && evalA.score <= evalB.score) || (targetWinner === 'B' && evalB.score <= evalA.score))) {
-              deck = generateShuffledDeck();
-              cA = [deck[0], deck[2], deck[4]];
-              cB = [deck[1], deck[3], deck[5]];
-              evalA = evaluate3Cards(cA);
-              evalB = evaluate3Cards(cB);
-              tries++;
-            }
+        }
+
+        if (targetWinner) {
+          let tries = 0;
+          while (tries < 20 && ((targetWinner === 'A' && evalA.score <= evalB.score) || (targetWinner === 'B' && evalB.score <= evalA.score))) {
+            deck = generateShuffledDeck();
+            cA = [deck[0], deck[2], deck[4]];
+            cB = [deck[1], deck[3], deck[5]];
+            evalA = evaluate3Cards(cA);
+            evalB = evaluate3Cards(cB);
+            tries++;
           }
         }
 
@@ -886,21 +911,29 @@ export class LiveCasinoEngine {
 
   private settleTeenPattiRound() {
     const winner = this.teenPatti.winner;
+    const controls = db.allGameControls?.teen_patti || {};
+    const configuredMainOdds = Number(controls.mainOdds) > 0 ? Number(controls.mainOdds) : 1.98;
+    const configuredPlusOdds = Number(controls.plusOdds) > 0 ? Number(controls.plusOdds) : 4.5;
+
     for (const bet of this.teenPatti.activeBets.values()) {
       const user = db.getUser(bet.userId);
       if (!user) continue;
 
       let won = false;
-      let multiplier = bet.odds || 1.98;
+      let multiplier = bet.odds || configuredMainOdds;
 
-      if (bet.selection === 'A_BACK' && winner === 'A') won = true;
-      else if (bet.selection === 'B_BACK' && winner === 'B') won = true;
-      else if (bet.selection === 'A_PLUS' && (winner === 'A' || this.teenPatti.evaluationA?.type !== 'HIGH_CARD')) {
+      if (bet.selection === 'A_BACK' && winner === 'A') {
         won = true;
-        multiplier = 2.5;
+        multiplier = bet.odds || configuredMainOdds;
+      } else if (bet.selection === 'B_BACK' && winner === 'B') {
+        won = true;
+        multiplier = bet.odds || configuredMainOdds;
+      } else if (bet.selection === 'A_PLUS' && (winner === 'A' || this.teenPatti.evaluationA?.type !== 'HIGH_CARD')) {
+        won = true;
+        multiplier = bet.odds || configuredPlusOdds;
       } else if (bet.selection === 'B_PLUS' && (winner === 'B' || this.teenPatti.evaluationB?.type !== 'HIGH_CARD')) {
         won = true;
-        multiplier = 2.5;
+        multiplier = bet.odds || configuredPlusOdds;
       }
 
       const winAmount = won ? parseFloat((bet.stake * multiplier).toFixed(2)) : 0;
@@ -969,7 +1002,7 @@ export class LiveCasinoEngine {
         // Transition to DEALING / ROLLING
         this.sevenUpDown.phase = 'dealing';
         this.sevenUpDown.phaseStartTime = now;
-        this.sevenUpDown.countdown = 5;
+        this.sevenUpDown.countdown = 6;
 
         // Roll 2 dice
         const controls = db.allGameControls?.seven_up_down || { mode: 'auto_managed', targetWinRate: 0.48 };
@@ -977,17 +1010,52 @@ export class LiveCasinoEngine {
         let d2 = Math.floor(Math.random() * 6) + 1;
         let sum = d1 + d2;
 
-        if (controls.mode === 'auto_managed' && this.sevenUpDown.activeBets.size > 0) {
+        let targetZone: 'down' | 'seven' | 'up' | null = null;
+
+        if (controls.mode === 'force_down') {
+          targetZone = 'down';
+        } else if (controls.mode === 'force_seven') {
+          targetZone = 'seven';
+        } else if (controls.mode === 'force_up') {
+          targetZone = 'up';
+        } else if (controls.mode === 'house_best' && this.sevenUpDown.activeBets.size > 0) {
           let betDown = 0;
           let betSeven = 0;
           let betUp = 0;
           for (const b of this.sevenUpDown.activeBets.values()) {
-            betDown += b.bets?.down || 0;
-            betSeven += b.bets?.seven || 0;
-            betUp += b.bets?.up || 0;
+            betDown += (b.bets?.down || 0) + (b.bets?.zone_down || 0);
+            betSeven += (b.bets?.seven || 0) + (b.bets?.zone_seven || 0);
+            betUp += (b.bets?.up || 0) + (b.bets?.zone_up || 0);
+          }
+          // House liability: down & up pay 1.98x, seven pays 12x
+          const liabDown = betDown * 1.98;
+          const liabSeven = betSeven * 12.0;
+          const liabUp = betUp * 1.98;
+          if (liabDown <= liabSeven && liabDown <= liabUp) targetZone = 'down';
+          else if (liabUp <= liabDown && liabUp <= liabSeven) targetZone = 'up';
+          else targetZone = 'seven';
+        } else if (controls.mode === 'force_win' && this.sevenUpDown.activeBets.size > 0) {
+          let betDown = 0;
+          let betSeven = 0;
+          let betUp = 0;
+          for (const b of this.sevenUpDown.activeBets.values()) {
+            betDown += (b.bets?.down || 0) + (b.bets?.zone_down || 0);
+            betSeven += (b.bets?.seven || 0) + (b.bets?.zone_seven || 0);
+            betUp += (b.bets?.up || 0) + (b.bets?.zone_up || 0);
+          }
+          if (betDown >= betUp && betDown >= betSeven) targetZone = 'down';
+          else if (betUp >= betDown && betUp >= betSeven) targetZone = 'up';
+          else targetZone = 'seven';
+        } else if (controls.mode === 'auto_managed' && this.sevenUpDown.activeBets.size > 0) {
+          let betDown = 0;
+          let betSeven = 0;
+          let betUp = 0;
+          for (const b of this.sevenUpDown.activeBets.values()) {
+            betDown += (b.bets?.down || 0) + (b.bets?.zone_down || 0);
+            betSeven += (b.bets?.seven || 0) + (b.bets?.zone_seven || 0);
+            betUp += (b.bets?.up || 0) + (b.bets?.zone_up || 0);
           }
           const shouldPlayerWin = Math.random() < Number(controls.targetWinRate ?? 0.48);
-          let targetZone: 'down' | 'seven' | 'up' | null = null;
           if (betDown >= betUp && betDown >= betSeven && betDown > 0) {
             targetZone = shouldPlayerWin ? 'down' : (Math.random() < 0.5 ? 'up' : 'seven');
           } else if (betUp >= betDown && betUp >= betSeven && betUp > 0) {
@@ -995,16 +1063,17 @@ export class LiveCasinoEngine {
           } else if (betSeven > 0) {
             targetZone = shouldPlayerWin ? 'seven' : (Math.random() < 0.5 ? 'down' : 'up');
           }
-          if (targetZone) {
-            let tries = 0;
-            while (tries < 15) {
-              const currentZone = sum < 7 ? 'down' : sum === 7 ? 'seven' : 'up';
-              if (currentZone === targetZone) break;
-              d1 = Math.floor(Math.random() * 6) + 1;
-              d2 = Math.floor(Math.random() * 6) + 1;
-              sum = d1 + d2;
-              tries++;
-            }
+        }
+
+        if (targetZone) {
+          let tries = 0;
+          while (tries < 25) {
+            const currentZone = sum < 7 ? 'down' : sum === 7 ? 'seven' : 'up';
+            if (currentZone === targetZone) break;
+            d1 = Math.floor(Math.random() * 6) + 1;
+            d2 = Math.floor(Math.random() * 6) + 1;
+            sum = d1 + d2;
+            tries++;
           }
         }
 
@@ -1012,15 +1081,45 @@ export class LiveCasinoEngine {
         this.sevenUpDown.dice2 = d2;
         this.sevenUpDown.sum = sum;
 
+        const SUITS_LIST: Array<{ suit: 'spades' | 'hearts' | 'clubs' | 'diamonds'; symbol: string; color: 'red' | 'black' }> = [
+          { suit: 'spades', symbol: '♠', color: 'black' },
+          { suit: 'hearts', symbol: '♥', color: 'red' },
+          { suit: 'clubs', symbol: '♣', color: 'black' },
+          { suit: 'diamonds', symbol: '♦', color: 'red' },
+        ];
+        const s1 = SUITS_LIST[Math.floor(Math.random() * SUITS_LIST.length)];
+        const s2 = SUITS_LIST[Math.floor(Math.random() * SUITS_LIST.length)];
+        const rankNames: Record<number, string> = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6' };
+        this.sevenUpDown.card1 = {
+          rank: rankNames[d1] || String(d1),
+          suit: s1.suit,
+          suitSymbol: s1.symbol,
+          value: d1,
+          color: s1.color,
+          isEven: d1 % 2 === 0,
+          group: d1 <= 3 ? 'A23' : '456',
+          zone: 'down',
+        };
+        this.sevenUpDown.card2 = {
+          rank: rankNames[d2] || String(d2),
+          suit: s2.suit,
+          suitSymbol: s2.symbol,
+          value: d2,
+          color: s2.color,
+          isEven: d2 % 2 === 0,
+          group: d2 <= 3 ? 'A23' : '456',
+          zone: 'down',
+        };
+
         if (sum < 7) this.sevenUpDown.zone = 'down';
         else if (sum === 7) this.sevenUpDown.zone = 'seven';
         else this.sevenUpDown.zone = 'up';
       }
     } else if (this.sevenUpDown.phase === 'dealing') {
-      const remainingSec = Math.max(0, Math.ceil((5000 - elapsedMs) / 1000));
+      const remainingSec = Math.max(0, Math.ceil((6000 - elapsedMs) / 1000));
       this.sevenUpDown.countdown = remainingSec;
 
-      if (elapsedMs >= 5000) {
+      if (elapsedMs >= 6000) {
         // Transition to RESULT & SETTLEMENT
         this.sevenUpDown.phase = 'result';
         this.sevenUpDown.phaseStartTime = now;
@@ -1056,6 +1155,14 @@ export class LiveCasinoEngine {
 
   private settleSevenUpDownRound() {
     const zone = this.sevenUpDown.zone;
+    const sum = this.sevenUpDown.sum;
+    const controls = db.allGameControls?.seven_up_down || {};
+    const downUpMult = (Number(controls.downUpMultiplier) > 0 && Number(controls.downUpMultiplier) !== 2) ? Number(controls.downUpMultiplier) : 1.98;
+    const sevenMult = Number(controls.sevenMultiplier) > 0 ? Number(controls.sevenMultiplier) : 12.0;
+    const evenMult = Number(controls.evenMultiplier) > 0 ? Number(controls.evenMultiplier) : 2.10;
+    const oddMult = Number(controls.oddMultiplier) > 0 ? Number(controls.oddMultiplier) : 1.80;
+    const colorMult = Number(controls.colorMultiplier) > 0 ? Number(controls.colorMultiplier) : 1.98;
+
     for (const betObj of this.sevenUpDown.activeBets.values()) {
       const user = db.getUser(betObj.userId);
       if (!user) continue;
@@ -1063,11 +1170,23 @@ export class LiveCasinoEngine {
       let totalWin = 0;
       for (const [z, amt] of Object.entries(betObj.bets)) {
         if (!amt || amt <= 0) continue;
-        if (z === zone) {
-          if (zone === 'seven') totalWin += amt * 5; // 5x payout for exact 7
-          else totalWin += amt * 2; // 2x payout for 2-6 or 8-12
+        if ((z === 'down' || z === 'zone_down') && zone === 'down') {
+          totalWin += amt * downUpMult;
+        } else if ((z === 'up' || z === 'zone_up') && zone === 'up') {
+          totalWin += amt * downUpMult;
+        } else if ((z === 'seven' || z === 'zone_seven') && zone === 'seven') {
+          totalWin += amt * sevenMult;
+        } else if (z === 'oe_even' && sum % 2 === 0) {
+          totalWin += amt * evenMult;
+        } else if (z === 'oe_odd' && sum % 2 !== 0) {
+          totalWin += amt * oddMult;
+        } else if (z === 'color_red' && sum % 2 === 0) {
+          totalWin += amt * colorMult;
+        } else if (z === 'color_black' && sum % 2 !== 0) {
+          totalWin += amt * colorMult;
         }
       }
+      totalWin = parseFloat(totalWin.toFixed(2));
 
       const status = totalWin > 0 ? 'won' : 'lost';
       const stake = betObj.totalAmount;
@@ -1104,7 +1223,7 @@ export class LiveCasinoEngine {
         gameType: 'seven_up_down' as any,
         periodId: String(this.sevenUpDown.roundId),
         unitAmount: betObj.totalAmount,
-        multiplier: 1,
+        multiplier: 1.98,
         totalAmount: betObj.totalAmount,
         status,
         winAmount: totalWin,
@@ -1171,6 +1290,8 @@ export class LiveCasinoEngine {
       roundId: this.sevenUpDown.roundId,
       phase: this.sevenUpDown.phase,
       countdown: this.sevenUpDown.countdown,
+      card1: this.sevenUpDown.phase !== 'betting' ? this.sevenUpDown.card1 : null,
+      card2: this.sevenUpDown.phase !== 'betting' ? this.sevenUpDown.card2 : null,
       dice1: this.sevenUpDown.phase !== 'betting' ? this.sevenUpDown.dice1 : null,
       dice2: this.sevenUpDown.phase !== 'betting' ? this.sevenUpDown.dice2 : null,
       sum: this.sevenUpDown.phase !== 'betting' ? this.sevenUpDown.sum : null,

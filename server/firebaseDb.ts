@@ -488,6 +488,8 @@ export async function syncDataToFirestore(dbInstance: any, force = false) {
       activityPromosConfig: dbInstance.activityPromosConfig || [],
       allGameControls: dbInstance.allGameControls || {},
       referralSystemSettings: dbInstance.referralSystemSettings || {},
+      announcementPopup: dbInstance.announcementPopup || {},
+      firstDepositBonusConfig: dbInstance.firstDepositBonusConfig || {},
       supportTickets: (dbInstance.supportTickets || []).slice(0, 50),
       adminUpiDetails: dbInstance.adminUpiDetails || {},
       adminBankDetails: dbInstance.adminBankDetails || {},
@@ -657,6 +659,8 @@ export async function loadDataFromFirestore(dbInstance: any): Promise<number> {
         if (meta.allGameControls) dbInstance.allGameControls = { ...dbInstance.allGameControls, ...meta.allGameControls };
         if (meta.referralSystemSettings) dbInstance.referralSystemSettings = { ...dbInstance.referralSystemSettings, ...meta.referralSystemSettings };
         if (meta.supportTickets && meta.supportTickets.length > 0) dbInstance.supportTickets = meta.supportTickets;
+        if (meta.announcementPopup) dbInstance.announcementPopup = { ...dbInstance.announcementPopup, ...meta.announcementPopup };
+        if (meta.firstDepositBonusConfig) dbInstance.firstDepositBonusConfig = { ...dbInstance.firstDepositBonusConfig, ...meta.firstDepositBonusConfig };
         if (meta.adminUpiDetails) dbInstance.adminUpiDetails = { ...dbInstance.adminUpiDetails, ...meta.adminUpiDetails };
         if (meta.adminBankDetails) dbInstance.adminBankDetails = { ...dbInstance.adminBankDetails, ...meta.adminBankDetails };
         if (meta.giftCodes && Array.isArray(meta.giftCodes) && meta.giftCodes.length > 0) {

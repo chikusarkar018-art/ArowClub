@@ -148,6 +148,26 @@ export const UserGamePanel: React.FC = () => {
 
   // Navigate to target page while pushing to stack and browser history
   const navigateTo = (page: AppPage) => {
+    const gamePages: Record<string, string> = {
+      game: 'wingo_1m',
+      teen_patti: 'teen_patti',
+      seven_up_down: 'seven_up_down',
+      aviator: 'aviator',
+      mines: 'mines',
+      chicken_road: 'chicken_road',
+      roulette: 'roulette',
+      plinko: 'plinko',
+      ludo: 'ludo',
+      chess: 'chess',
+    };
+    if (gamePages[page]) {
+      const gKey = gamePages[page];
+      const disabledList = Array.isArray(user?.disabledGames) ? user.disabledGames : [];
+      if (disabledList.includes(gKey) || (page === 'game' && disabledList.some((k: string) => k.startsWith('wingo')))) {
+        showToast('Access Restricted: This game is currently disabled for your account by Game Control (GC).', 'error');
+        return;
+      }
+    }
     setNavStack((prev) => {
       if (prev[prev.length - 1] === page) return prev;
       return [...prev, page];
@@ -234,15 +254,13 @@ export const UserGamePanel: React.FC = () => {
     buttonText: 'Got It / Continue',
   });
 
-  // Check Announcement & First Deposit Bonus Popups on ID Open
+  // Check Announcement & First Deposit Bonus Popups on ID Open and on navigation to Home or Profile (Account)
   useEffect(() => {
     if (!user) return;
+    // Only check when visiting Home or Profile (Account)
+    if (activePage !== 'home' && activePage !== 'profile') return;
 
-    let hasRun = false;
-    const checkPopupsOnOpen = async () => {
-      if (hasRun) return;
-      hasRun = true;
-
+    const checkPopups = async () => {
       try {
         const todayStr = new Date().toISOString().split('T')[0];
         const isAnnouncementDismissed = localStorage.getItem('announcement_popup_dismissed_date') === todayStr;
@@ -258,13 +276,17 @@ export const UserGamePanel: React.FC = () => {
           setShowFirstDepositModal(true);
         }
       } catch {
-        setShowFirstDepositModal(true);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isFirstDepositDismissed = localStorage.getItem('first_deposit_popup_dismissed_date') === todayStr;
+        if (!isFirstDepositDismissed) {
+          setShowFirstDepositModal(true);
+        }
       }
     };
 
-    const timer = setTimeout(checkPopupsOnOpen, 600);
+    const timer = setTimeout(checkPopups, 500);
     return () => clearTimeout(timer);
-  }, [user?.uid]);
+  }, [user?.uid, activePage]);
 
   // Global listeners to open First Deposit Bonus popup anywhere
   useEffect(() => {

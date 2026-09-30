@@ -45,7 +45,10 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
   const renderCardFront = (card: PlayingCard) => {
     const isRed = card.color === 'red';
     return (
-      <div className="w-full h-full bg-gradient-to-b from-[#ffffff] via-[#faf7f2] to-[#ede4d3] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between select-none shadow-[0_10px_25px_rgba(0,0,0,0.8)] border border-amber-200/60 ring-1 ring-black/10">
+      <div className="w-full h-full bg-gradient-to-b from-[#ffffff] via-[#faf7f2] to-[#ede4d3] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between select-none shadow-[0_12px_28px_rgba(0,0,0,0.85)] border-2 border-amber-200/80 ring-1 ring-black/15 relative overflow-hidden">
+        {/* Holographic light sweep sheen */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none animate-card-sheen" />
+
         {/* Top left rank & suit */}
         <div className={`text-left leading-none font-black ${isRed ? 'text-rose-600' : 'text-zinc-950'}`}>
           <div className="text-sm sm:text-xl font-mono tracking-tight font-extrabold">{card.rank}</div>
@@ -178,12 +181,16 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
 
         {/* 3. CASINO SHOE (LEFT CORNER) */}
         <div className="absolute top-[48%] left-3 sm:left-6 z-20 pointer-events-none flex flex-col items-center">
-          <div className="w-11 h-16 sm:w-14 sm:h-20 bg-gradient-to-br from-zinc-800 via-zinc-900 to-black rounded-lg border border-amber-500/50 shadow-2xl transform -rotate-12 flex flex-col justify-between p-1.5">
+          <div className={`w-11 h-16 sm:w-14 sm:h-20 bg-gradient-to-br from-zinc-800 via-zinc-900 to-black rounded-lg border border-amber-500/50 shadow-2xl transform -rotate-12 flex flex-col justify-between p-1.5 transition-all duration-300 ${
+            isDealingCard1 || isDealingCard2 ? 'scale-110 shadow-[0_0_20px_rgba(245,158,11,0.8)] border-amber-300' : ''
+          }`}>
             <div className="w-full h-1 bg-amber-400/60 rounded-full" />
             <div className="text-[7px] sm:text-[9px] text-amber-300 font-mono font-black text-center uppercase tracking-widest">
               SHOE
             </div>
-            <div className="w-full h-2.5 bg-red-900 rounded border border-amber-400/40" />
+            <div className={`w-full h-2.5 rounded border border-amber-400/40 transition-colors ${
+              isDealingCard1 || isDealingCard2 ? 'bg-amber-500' : 'bg-red-900'
+            }`} />
           </div>
         </div>
 
@@ -263,9 +270,11 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
             {/* 100% FULLY VISIBLE CARD DEALING SPOTS */}
             <div className="relative z-10 flex items-center justify-center gap-4 sm:gap-8 py-1">
               {/* CARD 1 POSITION */}
-              <div className="relative w-20 h-28 sm:w-28 sm:h-38 rounded-xl sm:rounded-2xl border-2 border-dashed border-amber-400/40 flex items-center justify-center bg-black/40 perspective-1000 shadow-inner">
+              <div className={`relative w-20 h-28 sm:w-28 sm:h-38 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center bg-black/40 perspective-1000 shadow-inner transition-all duration-500 ${
+                isResultReady ? 'border-amber-400 ring-2 ring-amber-400/80 animate-card-glow' : 'border-dashed border-amber-400/40'
+              }`}>
                 {/* Empty spot watermark */}
-                {!card1 && (
+                {(!card1 || dealingStep < 1) && (
                   <div className="text-center opacity-40 text-amber-200">
                     <span className="text-[10px] sm:text-xs font-mono font-bold block">CARD 1</span>
                     <span className="text-xl sm:text-2xl mt-0.5 block">🂠</span>
@@ -273,7 +282,7 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
                 )}
 
                 {/* Card 1 Physical Entity on Table */}
-                {card1 && (
+                {card1 && dealingStep >= 1 && (
                   <div
                     className={`w-full h-full relative preserve-3d transition-transform duration-700 ${
                       isDealingCard1 ? 'animate-deal-card-1' : ''
@@ -298,9 +307,11 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
               </div>
 
               {/* CARD 2 POSITION */}
-              <div className="relative w-20 h-28 sm:w-28 sm:h-38 rounded-xl sm:rounded-2xl border-2 border-dashed border-amber-400/40 flex items-center justify-center bg-black/40 perspective-1000 shadow-inner">
+              <div className={`relative w-20 h-28 sm:w-28 sm:h-38 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center bg-black/40 perspective-1000 shadow-inner transition-all duration-500 ${
+                isResultReady ? 'border-amber-400 ring-2 ring-amber-400/80 animate-card-glow' : 'border-dashed border-amber-400/40'
+              }`}>
                 {/* Empty spot watermark */}
-                {!card2 && (
+                {(!card2 || dealingStep < 2) && (
                   <div className="text-center opacity-40 text-amber-200">
                     <span className="text-[10px] sm:text-xs font-mono font-bold block">CARD 2</span>
                     <span className="text-xl sm:text-2xl mt-0.5 block">🂠</span>
@@ -308,7 +319,7 @@ export const LiveCasinoSevenTable: React.FC<LiveCasinoSevenTableProps> = ({
                 )}
 
                 {/* Card 2 Physical Entity on Table */}
-                {card2 && (
+                {card2 && dealingStep >= 2 && (
                   <div
                     className={`w-full h-full relative preserve-3d transition-transform duration-700 ${
                       isDealingCard2 ? 'animate-deal-card-2' : ''

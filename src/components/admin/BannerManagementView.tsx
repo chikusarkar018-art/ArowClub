@@ -38,6 +38,54 @@ export const BannerManagementView: React.FC = () => {
     actionUrl: '/recharge',
   });
   const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // File Upload Handler (reads image file, encodes to Base64, and uploads to server static directory)
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file (PNG, JPG, WEBP)', 'error');
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      showToast('Image size should be less than 8MB', 'error');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const res = await api.uploadAdminImage(base64Data, file.name, 'announcements');
+          if (res?.success && res.imageUrl) {
+            setAnnouncement((prev) => ({ ...prev, imageUrl: res.imageUrl }));
+            showToast('Banner image uploaded successfully! Click "Save Announcement Popup" to publish.', 'success');
+          } else {
+            // If upload API fails, fallback to Data URL directly
+            setAnnouncement((prev) => ({ ...prev, imageUrl: base64Data }));
+            showToast('Banner image loaded! Click "Save Announcement Popup" to save.', 'info');
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Error processing uploaded image', 'error');
+        } finally {
+          setIsUploadingImage(false);
+        }
+      };
+      reader.onerror = () => {
+        setIsUploadingImage(false);
+        showToast('Failed to read image file', 'error');
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setIsUploadingImage(false);
+      showToast(err.message || 'Upload failed', 'error');
+    }
+  };
 
   // ================= FIRST DEPOSIT BONUS POPUP STATE =================
   const [firstDepositConfig, setFirstDepositConfig] = useState<FirstDepositBonusConfig>({
@@ -425,38 +473,61 @@ export const BannerManagementView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Announcement Banner Image URL
+                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Announcement Banner Image</span>
+                  <span className="text-[10px] text-amber-400 font-normal">Recommended: 16:9 ratio (e.g. 800×450 px)</span>
                 </label>
-                <input
-                  type="url"
-                  value={announcement.imageUrl || ''}
-                  onChange={(e) => setAnnouncement((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                  placeholder="e.g. /banners/bonus_100.jpg or https://..."
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-zinc-500"
-                />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/bonus_100.jpg' }))}
-                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
-                  >
-                    Preset 1 (Bonus 100)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/vip_carnival.jpg' }))}
-                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
-                  >
-                    Preset 2 (VIP Carnival)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/invite_earn.jpg' }))}
-                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
-                  >
-                    Preset 3 (Invite & Earn)
-                  </button>
+                
+                {/* File Upload Button + Image URL input */}
+                <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/10 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold cursor-pointer transition active:scale-95 shrink-0">
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isUploadingImage ? 'Uploading...' : 'Upload Image File'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isUploadingImage}
+                        onChange={handleImageFileUpload}
+                      />
+                    </label>
+
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={announcement.imageUrl || ''}
+                        onChange={(e) => setAnnouncement((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                        placeholder="Image URL or upload file..."
+                        className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-zinc-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] text-zinc-400 self-center mr-1">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/bonus_100.jpg' }))}
+                      className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
+                    >
+                      Bonus 100
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/vip_carnival.jpg' }))}
+                      className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
+                    >
+                      VIP Carnival
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnnouncement((prev) => ({ ...prev, imageUrl: '/banners/invite_earn.jpg' }))}
+                      className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-zinc-300"
+                    >
+                      Invite & Earn
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -501,19 +572,51 @@ export const BannerManagementView: React.FC = () => {
               </div>
 
               {/* Preview Box */}
-              <div className="p-3 bg-[#0a0b12] rounded-xl border border-white/10">
-                <div className="text-[11px] font-bold text-amber-400 mb-1">Live Preview Snapshot:</div>
-                <div className="flex items-center gap-3">
+              <div className="p-3 bg-[#0a0b12] rounded-xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-400">Live Client Modal Preview:</span>
+                  <span className="text-[10px] text-zinc-500">How it looks on user screen</span>
+                </div>
+                
+                <div className="w-full max-w-[280px] mx-auto bg-gradient-to-b from-[#181a28] to-[#08090f] border border-amber-500/40 rounded-2xl overflow-hidden shadow-xl text-left">
+                  {/* Mock Header */}
+                  <div className="px-3 py-2 border-b border-amber-500/20 flex items-center justify-between bg-[#121422]">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="w-4 h-4 rounded-md bg-amber-500 text-black flex items-center justify-center shrink-0">
+                        <Megaphone className="w-2.5 h-2.5" />
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-300 truncate">{announcement.title || 'Official Announcement'}</span>
+                    </div>
+                    <span className="text-zinc-500 text-xs leading-none">×</span>
+                  </div>
+
+                  {/* Mock Image with 16:9 ratio */}
                   {announcement.imageUrl && (
-                    <img
-                      src={announcement.imageUrl}
-                      alt="Preview"
-                      className="w-16 h-12 rounded object-cover border border-white/10"
-                    />
+                    <div className="w-full aspect-[16/9] bg-black/60 overflow-hidden relative border-b border-white/5">
+                      <img
+                        src={announcement.imageUrl}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/banners/bonus_100.jpg';
+                        }}
+                      />
+                    </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-white truncate">{announcement.title}</div>
-                    <div className="text-[10px] text-zinc-400 line-clamp-2">{announcement.message}</div>
+
+                  {/* Mock Content */}
+                  <div className="p-2.5 space-y-1">
+                    <p className="text-[10px] text-zinc-300 line-clamp-3 leading-relaxed">
+                      {announcement.message || 'Announcement message preview...'}
+                    </p>
+                  </div>
+
+                  {/* Mock Footer */}
+                  <div className="px-2.5 py-1.5 bg-[#0a0c14] border-t border-amber-500/20 flex items-center justify-between text-[9px] text-zinc-400">
+                    <span>No more reminders today</span>
+                    <span className="px-2 py-0.5 rounded bg-amber-400 text-black font-bold text-[9px]">
+                      {announcement.buttonText || 'Continue'}
+                    </span>
                   </div>
                 </div>
               </div>

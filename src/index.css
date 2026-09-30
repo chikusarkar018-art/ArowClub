@@ -214,46 +214,58 @@
 
 @keyframes deal-card-slide-1 {
   0% {
-    transform: translate(-120px, -110px) scale(0.35) rotate(-25deg);
+    transform: translate(-180px, -130px) scale(0.35) rotate(-28deg);
     opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
   }
-  40% {
+  25% {
     opacity: 1;
+    filter: drop-shadow(0 15px 25px rgba(0,0,0,0.85));
+  }
+  75% {
+    transform: translate(2px, -4px) scale(1.04) rotate(1.5deg);
   }
   100% {
     transform: translate(0, 0) scale(1) rotate(0deg);
     opacity: 1;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.7));
   }
 }
 
 @keyframes deal-card-slide-2 {
   0% {
-    transform: translate(90px, -110px) scale(0.35) rotate(20deg);
+    transform: translate(-280px, -130px) scale(0.35) rotate(-28deg);
     opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
   }
-  40% {
+  25% {
     opacity: 1;
+    filter: drop-shadow(0 15px 25px rgba(0,0,0,0.85));
+  }
+  75% {
+    transform: translate(2px, -4px) scale(1.04) rotate(1.5deg);
   }
   100% {
     transform: translate(0, 0) scale(1) rotate(0deg);
     opacity: 1;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.7));
   }
 }
 
 .animate-deal-card-1 {
-  animation: deal-card-slide-1 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  animation: deal-card-slide-1 0.85s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
 }
 
 .animate-deal-card-2 {
-  animation: deal-card-slide-2 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  animation: deal-card-slide-2 0.85s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
 }
 
 @keyframes card-flip-in {
   0% {
     transform: rotateY(0deg) scale(1);
   }
-  50% {
-    transform: rotateY(90deg) scale(1.08) translateY(-6px);
+  40% {
+    transform: rotateY(90deg) scale(1.12) translateY(-10px);
   }
   100% {
     transform: rotateY(180deg) scale(1) translateY(0);
@@ -261,6 +273,32 @@
 }
 
 .animate-card-3d-flip {
-  animation: card-flip-in 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: card-flip-in 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes card-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(245, 196, 67, 0.6), 0 0 30px rgba(245, 196, 67, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(245, 196, 67, 0.95), 0 0 50px rgba(245, 196, 67, 0.6);
+  }
+}
+
+.animate-card-glow {
+  animation: card-glow-pulse 1.6s infinite ease-in-out;
+}
+
+@keyframes card-sheen {
+  0% {
+    transform: translateX(-100%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(200%) rotate(25deg);
+  }
+}
+
+.animate-card-sheen {
+  animation: card-sheen 1.2s ease-in-out forwards;
 }
 

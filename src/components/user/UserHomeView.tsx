@@ -52,7 +52,7 @@ export const UserHomeView: React.FC<UserHomeViewProps> = ({
   onOpenSupport,
   onOpenGiftRedeem,
 }) => {
-  const { user } = useAuth();
+  const { user, showToast } = useAuth();
   // Home page permanently strictly stays in luxury Dark mode per user requirement
   const isLight = false;
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
@@ -257,6 +257,11 @@ export const UserHomeView: React.FC<UserHomeViewProps> = ({
   }, [banners.length]);
 
   const handleGameClick = (game: typeof gamesGrid[0]) => {
+    const disabledList = Array.isArray(user?.disabledGames) ? user.disabledGames : [];
+    if (disabledList.includes(game.id) || (game.isLottery && disabledList.some((k: string) => k.startsWith('wingo')))) {
+      showToast(`Access Restricted: "${game.name}" is currently disabled for your account by Game Control (GC).`, 'error');
+      return;
+    }
     if (game.id === 'chess' && onNavigateChess) {
       onNavigateChess();
     } else if (game.id === 'ludo' && onNavigateLudo) {

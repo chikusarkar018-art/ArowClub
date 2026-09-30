@@ -517,6 +517,28 @@ class ApiService {
     return this.request(`/api/admin/users?${params.toString()}`);
   }
 
+  async updateAdminUserGameControl(uid: string, disabledGames: string[], adminUsername?: string) {
+    return this.request<{ success: boolean; message: string; disabledGames: string[] }>(`/api/admin/users/${uid}/game-control`, {
+      method: 'POST',
+      body: JSON.stringify({ disabledGames, adminUsername }),
+    });
+  }
+
+  async getAdminUserExposure(uid: string) {
+    return this.request<{
+      success: boolean;
+      uid: string;
+      username: string;
+      walletBalance: number;
+      exposure: number;
+      activeExposure: number;
+      totalBet: number;
+      totalWin: number;
+      gameBreakdown: Record<string, { totalBet: number; totalWin: number; rounds: number; netProfit: number }>;
+      recentBets: any[];
+    }>(`/api/admin/users/${uid}/exposure`);
+  }
+
   async adminAdjustUserVip(uid: string, vipLevel: number, vipExp?: number, rewardBonus?: number, reason?: string, adminUsername?: string) {
     return this.request(`/api/admin/users/${uid}/vip-adjust`, {
       method: 'POST',
@@ -884,6 +906,13 @@ class ApiService {
   }
 
   // ===================== ANNOUNCEMENT POPUP APIS =====================
+  async uploadAdminImage(imageData: string, fileName?: string, folder: string = 'announcements') {
+    return this.request<{ success: boolean; url: string; imageUrl: string }>('/api/admin/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({ imageData, fileName, folder }),
+    });
+  }
+
   async getAnnouncementPopup() {
     return this.request('/api/announcement-popup');
   }
@@ -1157,6 +1186,8 @@ class ApiService {
       roundId: number;
       phase: 'betting' | 'dealing' | 'result';
       countdown: number;
+      card1?: any;
+      card2?: any;
       dice1: number | null;
       dice2: number | null;
       sum: number | null;
@@ -1166,7 +1197,7 @@ class ApiService {
     }>('/api/live/seven-up-down');
   }
 
-  async placeSevenUpDownLiveBet(uid: string, bets: Record<'down' | 'seven' | 'up', number>) {
+  async placeSevenUpDownLiveBet(uid: string, bets: Record<string, number>) {
     return this.request<{
       success: boolean;
       message: string;

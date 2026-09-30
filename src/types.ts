@@ -240,6 +240,10 @@ export interface AdminUserSummary {
   totalWithdrawal: number;
   totalBet: number;
   totalWin: number;
+  exposure?: number;
+  activeExposure?: number;
+  disabledGames?: string[];
+  gameBreakdown?: Record<string, { totalBet: number; totalWin: number; rounds: number; netProfit: number }>;
   status: UserStatus;
   registrationDate: string;
   lastLogin: string;
@@ -320,6 +324,7 @@ export interface User {
   activeSessionId?: string | null;
   activeSessionDevice?: string;
   activeSessionTime?: string;
+  disabledGames?: string[];
 }
 
 export interface AnnouncementPopupConfig {
@@ -394,6 +399,7 @@ export type BetSelection = string | number;
 
 export interface Bet {
   id: string;
+  userId?: string;
   orderNumber?: string;
   periodId: string;
   gameType: GameType;

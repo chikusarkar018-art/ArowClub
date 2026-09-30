@@ -376,7 +376,7 @@ export const UserTeenPattiGameView: React.FC<UserTeenPattiGameViewProps> = ({
 
           if (isWin) {
             userWonAny = true;
-            const winAmount = Math.round(bet.stake * returnMultiplier);
+            const winAmount = parseFloat((bet.stake * returnMultiplier).toFixed(2));
             totalWinningsCredit += winAmount;
 
             // Server-authoritative live casino engine settles Teen Patti payouts directly
