@@ -38,6 +38,7 @@ import { PredictionBigSmallView } from './components/admin/PredictionBigSmallVie
 import { GiftCodeManagementView } from './components/admin/GiftCodeManagementView.js';
 import { FirstDepositBonusManagementView } from './components/admin/FirstDepositBonusManagementView.js';
 import { AdminGoogleSheetLedgerView } from './components/admin/AdminGoogleSheetLedgerView.js';
+import { HouseBetAndWinRateControlView } from './components/admin/HouseBetAndWinRateControlView.js';
 import { UserGamePanel } from './components/user/UserGamePanel.js';
 
 const MainApp: React.FC = () => {
@@ -132,6 +133,8 @@ const MainApp: React.FC = () => {
 
       case 'wingo_live_control':
         return <WingoControlCenterMobileView onNavigateTab={(tab) => setAdminTab(tab)} />;
+      case 'house_bet_winning_control':
+        return <HouseBetAndWinRateControlView />;
       case 'game_winning_cut':
         return <GameWinningCutSettingsView />;
       case 'wingo_dashboard':

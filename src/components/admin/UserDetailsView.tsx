@@ -61,6 +61,8 @@ export const UserDetailsView: React.FC<UserDetailsViewProps> = ({ uid, onBack })
 
   const { admin, showToast } = useAuth();
   const [togglingBlock, setTogglingBlock] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   const handleToggleBlock = async () => {
     if (!data?.user || togglingBlock) return;
@@ -231,6 +233,25 @@ export const UserDetailsView: React.FC<UserDetailsViewProps> = ({ uid, onBack })
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!data?.user) return;
+    setDeletingUser(true);
+    try {
+      const res = await api.adminDeleteUser(data.user.uid, admin?.username || 'SuperAdmin');
+      if (res?.success) {
+        showToast?.(`User UID ${data.user.uid} (${data.user.username}) deleted permanently!`, 'success');
+        setShowDeleteModal(false);
+        onBack();
+      } else {
+        alert(res?.error || 'Failed to delete user');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete user');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
@@ -342,6 +363,16 @@ export const UserDetailsView: React.FC<UserDetailsViewProps> = ({ uid, onBack })
               </>
             )}
           </button>
+
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+            title="Permanently delete user account and all data"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete User</span>
+          </button>
+
           <span className="text-xs text-[#71717a] font-mono">UID #{user.uid}</span>
         </div>
       </div>
@@ -1241,6 +1272,55 @@ export const UserDetailsView: React.FC<UserDetailsViewProps> = ({ uid, onBack })
           </div>
         );
       })()}
+
+      {/* Delete User Confirmation Modal */}
+      {showDeleteModal && data?.user && (
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#12131a] border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-rose-500/20 pb-3">
+              <div className="flex items-center gap-2.5 text-rose-400">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+                <h3 className="font-bold text-white text-base">Delete User ID (यूजर डिलीट करें)</h3>
+              </div>
+              <button
+                onClick={() => {
+                  if (!deletingUser) setShowDeleteModal(false);
+                }}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-1.5 text-xs">
+              <div className="text-rose-300 font-bold">⚠️ स्थायी रूप से डिलीट करने की पुष्टि:</div>
+              <p className="text-zinc-300 leading-relaxed text-[11px]">
+                क्या आप वाकई यूजर <strong className="text-white font-mono">UID: {data.user.uid}</strong> ({data.user.username}) को डिलीट करना चाहते हैं?
+                इसका वॉलेट बैलेंस ₹{Number(data.user.walletBalance || 0).toLocaleString('en-IN')}, बैंक खाते और डेटाबेस एंट्री हमेशा के लिए हटा दिए जाएंगे।
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 justify-end pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingUser}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                disabled={deletingUser}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-lg flex items-center gap-1.5"
+              >
+                {deletingUser ? 'Deleting...' : 'हाँ, यूजर हमेशा के लिए डिलीट करें'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

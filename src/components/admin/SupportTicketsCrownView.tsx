@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext.js';
 import {
   MessageSquare, Send, User, Bot, ShieldCheck, RefreshCw,
   Search, Clock, CheckCircle2, AlertCircle, Image, Video, Sparkles, X, Loader2,
-  Paperclip, FileText, Download, Check
+  Paperclip, FileText, Download, Check, Eye, RotateCw, ZoomIn, ZoomOut, ExternalLink
 } from 'lucide-react';
 import { SupportTicket } from '../../types.js';
 
@@ -24,8 +24,84 @@ export const SupportTicketsCrownView: React.FC = () => {
     fileName?: string;
   } | null>(null);
 
+  // Fullscreen High-Resolution Image Inspector Modal State
+  const [inspectImage, setInspectImage] = useState<{
+    url: string;
+    sender: string;
+    username: string;
+    timestamp: string;
+    fileName?: string;
+    ticketId?: string;
+    messageId?: string;
+  } | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [rotation, setRotation] = useState<number>(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const downloadImageSafely = (dataUrl: string, filename = 'attachment.png') => {
+    try {
+      if (dataUrl.startsWith('data:')) {
+        const parts = dataUrl.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        showToast?.('Image downloaded successfully', 'success');
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast?.('Image downloaded successfully', 'success');
+    } catch (err) {
+      console.error('Download failed:', err);
+      showToast?.('Failed to download image', 'error');
+    }
+  };
+
+  const openInNewSafeTab = (dataUrl: string, ticketId?: string, messageId?: string) => {
+    try {
+      if (ticketId && messageId) {
+        window.open(`/api/support/media/${ticketId}/${messageId}`, '_blank');
+        return;
+      }
+      if (dataUrl.startsWith('data:')) {
+        const parts = dataUrl.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        return;
+      }
+      window.open(dataUrl, '_blank');
+    } catch (err) {
+      console.error('Open safe tab error:', err);
+      showToast?.('Please use the Fullscreen Inspector to check the image', 'info');
+    }
+  };
 
   const fetchTickets = async () => {
     try {
@@ -53,6 +129,16 @@ export const SupportTicketsCrownView: React.FC = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [tickets, selectedTicketId]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && inspectImage) {
+        setInspectImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inspectImage]);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
 
@@ -335,9 +421,16 @@ export const SupportTicketsCrownView: React.FC = () => {
                       </div>
                     </div>
 
-                    <p className="text-xs text-[#a1a1aa] truncate mt-1">
-                      {t.lastMessage}
-                    </p>
+                    <div className="flex items-center justify-between gap-1 text-xs text-[#a1a1aa] mt-1">
+                      <p className="truncate flex-1">
+                        {t.lastMessage}
+                      </p>
+                      {t.messages?.some((m: any) => m.mediaUrl) && (
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold flex items-center gap-1 border border-amber-500/30">
+                          📷 Image
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -477,20 +570,86 @@ export const SupportTicketsCrownView: React.FC = () => {
                                 </a>
                               </div>
                             ) : (
-                              <img
-                                src={m.mediaUrl}
-                                alt="Attachment"
-                                className="w-full max-h-56 rounded-lg object-contain cursor-pointer hover:opacity-95"
-                                onClick={() => {
-                                  try {
-                                    const a = document.createElement('a');
-                                    a.href = m.mediaUrl;
-                                    a.target = '_blank';
-                                    a.rel = 'noopener noreferrer';
-                                    a.click();
-                                  } catch {}
-                                }}
-                              />
+                              <div className="flex flex-col bg-black/60 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+                                {/* Thumbnail with direct click-to-inspect */}
+                                <div
+                                  onClick={() => {
+                                    setInspectImage({
+                                      url: m.mediaUrl,
+                                      sender: m.sender,
+                                      username: m.username,
+                                      timestamp: m.timestamp,
+                                      fileName: m.fileName,
+                                      ticketId: m.ticketId || selectedTicket.id,
+                                      messageId: m.id,
+                                    });
+                                    setZoomLevel(1);
+                                    setRotation(0);
+                                  }}
+                                  className="relative group cursor-pointer overflow-hidden bg-black/40 flex items-center justify-center min-h-[140px] max-h-72"
+                                  title="Click to zoom in full resolution"
+                                >
+                                  <img
+                                    src={m.mediaUrl}
+                                    alt="Client Attachment / Slip"
+                                    className="max-h-72 w-auto max-w-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                                  />
+                                  <div className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-black/75 border border-white/20 text-[11px] text-amber-300 font-bold backdrop-blur-md flex items-center gap-1 shadow-md pointer-events-none">
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                    <span>Click to Zoom</span>
+                                  </div>
+                                </div>
+
+                                {/* Attachment Action Toolbar (Full check, safe new tab, download) */}
+                                <div className="p-2.5 bg-[#141418] border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <Image className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span className="text-[11px] text-zinc-300 font-mono truncate max-w-[150px]">
+                                      {m.fileName || 'Screenshot / Slip'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setInspectImage({
+                                          url: m.mediaUrl,
+                                          sender: m.sender,
+                                          username: m.username,
+                                          timestamp: m.timestamp,
+                                          fileName: m.fileName,
+                                          ticketId: m.ticketId || selectedTicket.id,
+                                          messageId: m.id,
+                                        });
+                                        setZoomLevel(1);
+                                        setRotation(0);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-black flex items-center gap-1.5 transition shadow cursor-pointer active:scale-95"
+                                      title="Open Fullscreen Lightbox & Check Slip"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>बड़ा देखें</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openInNewSafeTab(m.mediaUrl, m.ticketId || selectedTicket.id, m.id)}
+                                      className="px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                      title="Open image in new safe browser window"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                                      <span className="hidden sm:inline">New Tab</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadImageSafely(m.mediaUrl, m.fileName || `slip-${selectedTicket.uid}-${m.id}.png`)}
+                                      className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-200 text-xs font-semibold transition cursor-pointer"
+                                      title="Download image to device"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}
@@ -571,6 +730,120 @@ export const SupportTicketsCrownView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ================= FULLSCREEN HIGH-RES IMAGE INSPECTOR MODAL ================= */}
+      {inspectImage && (
+        <div className="fixed inset-0 z-[999999] bg-black/95 backdrop-blur-md flex flex-col p-3 sm:p-5 animate-fade-in select-none">
+          {/* Lightbox Header Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg shrink-0">
+                📷
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white text-sm sm:text-base">Client Screenshot & Slip Inspector</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-amber-400 font-bold">
+                    {inspectImage.username} ({inspectImage.sender.toUpperCase()})
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Uploaded: {new Date(inspectImage.timestamp).toLocaleString('en-IN')} {inspectImage.fileName ? `• ${inspectImage.fileName}` : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* Inspector Controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setZoomLevel(prev => Math.min(3.5, parseFloat((prev + 0.25).toFixed(2))))}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Zoom In (+)"
+              >
+                <ZoomIn className="w-3.5 h-3.5 text-amber-400" />
+                <span>Zoom +</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setZoomLevel(prev => Math.max(0.5, parseFloat((prev - 0.25).toFixed(2))))}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Zoom Out (-)"
+              >
+                <ZoomOut className="w-3.5 h-3.5 text-amber-400" />
+                <span>Zoom -</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setZoomLevel(1); setRotation(0); }}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition cursor-pointer"
+                title="Reset to 100%"
+              >
+                Reset ({Math.round(zoomLevel * 100)}%)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRotation(prev => (prev + 90) % 360)}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Rotate 90 degrees"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Rotate ({rotation}°)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openInNewSafeTab(inspectImage.url, inspectImage.ticketId, inspectImage.messageId)}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Open original image in separate safe tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                <span>New Window</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadImageSafely(inspectImage.url, inspectImage.fileName || `customer-proof-${inspectImage.username}-${Date.now()}.png`)}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer"
+                title="Download original file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInspectImage(null)}
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white transition cursor-pointer ml-1"
+                title="Close Viewer (or press Escape)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Lightbox Canvas Area */}
+          <div
+            onClick={() => setInspectImage(null)}
+            className="flex-1 flex items-center justify-center overflow-auto p-4 cursor-zoom-out"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-full max-h-full transition-transform duration-200 ease-out cursor-default"
+              style={{ transform: `scale(${zoomLevel}) rotate(${rotation}deg)` }}
+            >
+              <img
+                src={inspectImage.url}
+                alt="Inspected Attachment"
+                className="max-h-[82vh] max-w-[92vw] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.9)] border-2 border-zinc-700/80 bg-zinc-950"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

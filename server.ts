@@ -1606,6 +1606,7 @@ async function startServer() {
     if (genAI) {
       try {
         const conversationSummary = ticket.messages.slice(-6).map((m: any) => `${m.sender.toUpperCase()}: ${m.message}`).join('\n');
+        const userQuery = (message || '').trim() || (mediaUrl ? '[Customer attached a screenshot/image for verification]' : 'Hello');
         const prompt = `You are the friendly, official VIP AI Support Assistant for ArowClub / Win Go Pro online gaming platform.
 Context & Platform Rules:
 - Currency is INR (₹).
@@ -1614,28 +1615,62 @@ Context & Platform Rules:
 - Password change: For security against fraud, password change from login page is disabled; users contact customer care.
 - Games: Win Go (30s, 1m, 3m, 5m), Mines (5x5 grid with gems & hidden mines), Roulette (European 37 numbers 0-36), Aviator Crash, Cricket Live exchange, Plinko.
 - Language: If user speaks in Hindi, reply in natural, polite Hindi (Devanagari or friendly Hinglish). If English, reply in English.
+- SCREENSHOT / IMAGE INSPECTION: If the user attached an image or payment slip, examine it thoroughly! Identify the 12-digit UTR number, paid amount (₹), banking app (PhonePe, Paytm, Google Pay, BHIM, etc.), and status. Acknowledge to the player: "मैंने आपकी भेजी गई इमेज/स्लिप चेक कर ली है..." confirming details, and assure them that admin is verifying it or ask them to confirm their UTR if unclear.
 - If the issue cannot be resolved automatically or user wants manual check / refund dispute, inform them politely that you are connecting them directly to the Live Human Admin team. Keep reply concise (2-4 sentences max).
 
 Current Conversation:
 ${conversationSummary}
-USER QUERY: ${message}
+USER QUERY: ${userQuery}
 
 Assistant Reply:`;
 
-        const response = await genAI.models.generateContent({
-          model: 'gemini-3.7-flash',
-          contents: prompt,
-        });
+        const contents: any[] = [];
+        if (mediaUrl && (mediaType === 'image' || !mediaType) && mediaUrl.startsWith('data:image/')) {
+          const parts = mediaUrl.split(',');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const base64Data = parts[1];
+          if (base64Data) {
+            contents.push({
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
+            });
+          }
+        }
+        contents.push({ text: prompt });
 
-        aiResponseText = response.text?.trim() || '';
-      } catch (geminiErr) {
-        console.warn('Gemini AI error in support:', geminiErr);
+        // Try gemini-flash-latest, then gemini-3.1-flash-lite, with gentle quota handling
+        const candidateModels = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
+        for (const candidateModel of candidateModels) {
+          try {
+            const response = await genAI.models.generateContent({
+              model: candidateModel,
+              contents,
+            });
+            aiResponseText = response.text?.trim() || '';
+            if (aiResponseText) break;
+          } catch (modelErr: any) {
+            // Check for quota exhaustion / rate limits and fallback smoothly
+            const errMsg = String(modelErr?.message || modelErr);
+            if (errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('rate-limit')) {
+              console.warn(`[Support AI] Model ${candidateModel} quota reached, trying fallback or rule engine.`);
+            } else {
+              console.warn(`[Support AI] Error with ${candidateModel}:`, errMsg);
+            }
+          }
+        }
+      } catch (geminiErr: any) {
+        console.warn('[Support AI] General Gemini error:', geminiErr?.message || geminiErr);
       }
     }
 
     // Fallback AI logic if offline or rate-limited
     if (!aiResponseText) {
-      if (textLower.includes('deposit') || textLower.includes('recharge') || textLower.includes('utr') || textLower.includes('paisa')) {
+      if (mediaUrl && (mediaType === 'image' || !mediaType)) {
+        aiResponseText = 'आपकी भेजी गई इमेज/पेमेंट स्लिप प्राप्त हो गई है! हमारे सिस्टम ने स्क्रीनशॉट चेक कर लिया है। यदि यह रिचार्ज/डिपॉजिट रसीद है, तो कृपया 12 अंकों का UTR नंबर भी लिखें, हमारे लाइव एडमिन तुरंत इसे वेरिफाई कर आपके वॉलेट में बैलेंस जोड़ देंगे।';
+      } else if (textLower.includes('deposit') || textLower.includes('recharge') || textLower.includes('utr') || textLower.includes('paisa')) {
         aiResponseText = 'Recharge/Deposit के लिए Wallet में जाएं, UPI QR स्कैन करके भुगतान करें और 12 अंकों का UTR नंबर दर्ज करें। 2-5 मिनट में आपके वॉलेट में बैलेंस क्रेडिट हो जाता है।';
       } else if (textLower.includes('withdraw') || textLower.includes('nikasi') || textLower.includes('bank')) {
         aiResponseText = 'Withdrawal के लिए अपने Bank Account (Holder Name, Account No, IFSC) को जोड़ें (अधिकतम 3 खाते)। न्यूनतम निकासी ₹100 है। बैंक हटाने के लिए आपका पासवर्ड लगेगा।';
@@ -1668,6 +1703,30 @@ Assistant Reply:`;
 
   app.post('/api/support/message', handleSupportMessage);
   app.post('/api/support/send', handleSupportMessage);
+
+  // Safe media stream / viewer endpoint for attachments (opens cleanly in browser tab without base64 length or data-url block issues)
+  app.get('/api/support/media/:ticketId/:messageId', (req, res) => {
+    const { ticketId, messageId } = req.params;
+    const ticket = (db.supportTickets || []).find(t => t.id === ticketId);
+    if (!ticket) return res.status(404).send('Support ticket not found');
+
+    const msg = (ticket.messages || []).find(m => m.id === messageId);
+    if (!msg || !msg.mediaUrl) return res.status(404).send('Attachment not found');
+
+    if (msg.mediaUrl.startsWith('data:')) {
+      const match = msg.mediaUrl.match(/^data:([A-Za-z0-9\/\-+.]+);base64,(.+)$/);
+      if (match && match.length === 3) {
+        const contentType = match[1];
+        const buffer = Buffer.from(match[2], 'base64');
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Content-Disposition', `inline; filename="${msg.fileName || 'attachment'}"`);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.end(buffer);
+      }
+    }
+    return res.redirect(msg.mediaUrl);
+  });
 
   app.post('/api/support/escalate', (req, res) => {
     const uid = req.headers['x-user-uid'] as string || req.body.uid || '108429';
@@ -3428,6 +3487,168 @@ Assistant Reply:`;
     return res.status(400).json({ error: 'Controls payload is invalid' });
   });
 
+  // ===================== GAME HOUSE RULES & CLIENT WINNING % ENDPOINTS =====================
+  const DEFAULT_GAME_HOUSE_RULES = [
+    { id: 'wingo_30s', name: 'Win Go 30s', hindiName: 'विन गो 30 सेकंड', category: 'wingo', minBet: 10, maxBet: 50000, maxPayout: 200000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: 'Rapid 30-second color & number prediction with automated house win control.' },
+    { id: 'wingo_1m', name: 'Win Go 1 Min', hindiName: 'विन गो 1 मिनट', category: 'wingo', minBet: 10, maxBet: 50000, maxPayout: 200000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: 'Classic 1-minute color prediction with dynamic client payout adjustment.' },
+    { id: 'wingo_3m', name: 'Win Go 3 Min', hindiName: 'विन गो 3 मिनट', category: 'wingo', minBet: 10, maxBet: 50000, maxPayout: 200000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: '3-minute strategic color prediction round.' },
+    { id: 'wingo_5m', name: 'Win Go 5 Min', hindiName: 'विन गो 5 मिनट', category: 'wingo', minBet: 10, maxBet: 50000, maxPayout: 200000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: '5-minute VIP color prediction with high volume bet limits.' },
+    { id: 'aviator', name: 'Aviator Crash', hindiName: 'एविएटर क्रैश गेम', category: 'crash', minBet: 10, maxBet: 50000, maxPayout: 300000, clientWinRatePercent: 45, houseEdgePercent: 55, mode: 'house_best', isActive: true, description: 'Real-time crash multiplier plane game. Controls instant crash threshold & winning chance.' },
+    { id: 'mines', name: 'Mines Game', hindiName: 'माइन्स गोल्ड गेम', category: 'mines', minBet: 10, maxBet: 25000, maxPayout: 150000, clientWinRatePercent: 50, houseEdgePercent: 50, mode: 'auto_managed', isActive: true, description: '25-grid gem finding game. Admin sets mine blast step & player win rate.' },
+    { id: 'roulette', name: 'European Roulette', hindiName: 'यूरोपियन रूलेट', category: 'casino', minBet: 10, maxBet: 50000, maxPayout: 200000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: '37-number single zero roulette with targeted number & color payout control.' },
+    { id: 'chicken_road', name: 'Chicken Road', hindiName: 'चिकन रोड क्रॉसिंग', category: 'crash', minBet: 10, maxBet: 20000, maxPayout: 100000, clientWinRatePercent: 52, houseEdgePercent: 48, mode: 'auto_managed', isActive: true, description: 'Step-by-step multiplier crossing with step trap triggers.' },
+    { id: 'plinko', name: 'Plinko Arcade', hindiName: 'प्लिंको आर्केड', category: 'mines', minBet: 10, maxBet: 20000, maxPayout: 100000, clientWinRatePercent: 50, houseEdgePercent: 50, mode: 'auto_managed', isActive: true, description: 'Ball drop multiplier slots game with slot peg bias control.' },
+    { id: 'seven_up_down', name: '7 Up Down Live Dice', hindiName: '7 अप डाउन लाइव डाइस', category: 'casino', minBet: 10, maxBet: 50000, maxPayout: 250000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: 'Live 2-dice rolling game (Down 2-6, Lucky 7, Up 8-12).' },
+    { id: 'teen_patti', name: 'Teen Patti Live 20-20', hindiName: 'तीन पत्ती 20-20 लाइव', category: 'cards', minBet: 10, maxBet: 50000, maxPayout: 250000, clientWinRatePercent: 48, houseEdgePercent: 52, mode: 'auto_managed', isActive: true, description: 'Live 3-card Indian poker with player A vs player B odds control.' },
+    { id: 'ludo', name: 'Ludo Quick', hindiName: 'लूडो क्विक 2-प्लेयर', category: 'board', minBet: 20, maxBet: 10000, maxPayout: 50000, clientWinRatePercent: 50, houseEdgePercent: 50, mode: 'auto_managed', isActive: true, description: 'Fast 2-player board game with AI bot difficulty & win rate targeting.' },
+    { id: 'chess', name: 'Speed Chess', hindiName: 'स्पीड चेस / शतरंज', category: 'board', minBet: 20, maxBet: 10000, maxPayout: 50000, clientWinRatePercent: 50, houseEdgePercent: 50, mode: 'auto_managed', isActive: true, description: 'Real-time chess against engine with winning chance regulation.' },
+  ];
+
+  app.get('/api/admin/game-house-rules', (req, res) => {
+    if (!db.allGameControls) db.allGameControls = {};
+    if (!db.gameAutoModes) db.gameAutoModes = {};
+
+    const rules = DEFAULT_GAME_HOUSE_RULES.map((def) => {
+      const ctrl = db.allGameControls[def.id] || {};
+      const winMode = db.gameAutoModes[def.id];
+      const catalogEntry = (db.gameCatalog || []).find((g: any) => g.gameKey === def.id || g.id === def.id);
+
+      const minBet = Number(ctrl.minBet ?? catalogEntry?.minBet ?? def.minBet);
+      const maxBet = Number(ctrl.maxBet ?? catalogEntry?.maxBet ?? def.maxBet);
+      const maxPayout = Number(ctrl.maxPayout ?? def.maxPayout);
+      
+      let clientWinRatePercent = def.clientWinRatePercent;
+      if (ctrl.targetWinRate !== undefined && ctrl.targetWinRate !== null) {
+        clientWinRatePercent = Math.round(Number(ctrl.targetWinRate) * 100);
+      } else if (ctrl.houseRTP !== undefined && ctrl.houseRTP !== null) {
+        clientWinRatePercent = Math.round(Number(ctrl.houseRTP) * 100);
+      } else if (winMode === 'house_best') {
+        clientWinRatePercent = 20;
+      } else if (winMode === '25_percent') {
+        clientWinRatePercent = 25;
+      } else if (winMode === '50_percent') {
+        clientWinRatePercent = 50;
+      } else if (winMode === '75_percent') {
+        clientWinRatePercent = 75;
+      } else if (winMode === '100_percent') {
+        clientWinRatePercent = 95;
+      }
+
+      const houseEdgePercent = Math.max(0, 100 - clientWinRatePercent);
+      const mode = ctrl.mode || (winMode === 'house_best' ? 'house_best' : 'auto_managed');
+      const isActive = ctrl.isActive !== undefined ? Boolean(ctrl.isActive) : (catalogEntry ? catalogEntry.status === 'active' : true);
+
+      return {
+        ...def,
+        minBet,
+        maxBet,
+        maxPayout,
+        clientWinRatePercent,
+        houseEdgePercent,
+        mode,
+        isActive,
+      };
+    });
+
+    return res.json({ success: true, rules });
+  });
+
+  const applySingleHouseRule = (rule: any) => {
+    if (!rule || !rule.id) return;
+    const gameId = rule.id;
+    if (!db.allGameControls) db.allGameControls = {};
+    if (!db.gameAutoModes) db.gameAutoModes = {};
+
+    const winPercent = Math.min(100, Math.max(0, Number(rule.clientWinRatePercent ?? 50)));
+    const targetWinRate = Number((winPercent / 100).toFixed(2));
+    const minBet = Math.max(1, Number(rule.minBet ?? 10));
+    const maxBet = Math.max(minBet, Number(rule.maxBet ?? 50000));
+    const maxPayout = Math.max(maxBet, Number(rule.maxPayout ?? 200000));
+    const mode = rule.mode || 'auto_managed';
+    const isActive = rule.isActive !== false;
+
+    // Update in allGameControls
+    db.allGameControls[gameId] = {
+      ...(db.allGameControls[gameId] || {}),
+      minBet,
+      maxBet,
+      maxPayout,
+      targetWinRate,
+      houseRTP: targetWinRate,
+      mode,
+      isActive,
+    };
+
+    // Update WinGo specific mode
+    if (gameId.startsWith('wingo_')) {
+      if (mode === 'house_best') {
+        db.gameAutoModes[gameId] = 'house_best';
+      } else if (winPercent <= 25) {
+        db.gameAutoModes[gameId] = '25_percent';
+      } else if (winPercent <= 50) {
+        db.gameAutoModes[gameId] = '50_percent';
+      } else if (winPercent <= 75) {
+        db.gameAutoModes[gameId] = '75_percent';
+      } else {
+        db.gameAutoModes[gameId] = '100_percent';
+      }
+    }
+
+    // Update gameCatalog if present
+    const catalogEntry = (db.gameCatalog || []).find((g: any) => g.gameKey === gameId || g.id === gameId);
+    if (catalogEntry) {
+      catalogEntry.minBet = minBet;
+      catalogEntry.maxBet = maxBet;
+      catalogEntry.status = isActive ? 'active' : 'maintenance';
+      catalogEntry.rtp = winPercent;
+      catalogEntry.houseCutPercent = Math.max(0, 100 - winPercent);
+    }
+  };
+
+  app.post('/api/admin/game-house-rules', (req, res) => {
+    const { rules, adminUsername } = req.body;
+    if (!Array.isArray(rules)) {
+      return res.status(400).json({ error: 'Rules must be an array' });
+    }
+
+    rules.forEach((r: any) => applySingleHouseRule(r));
+    db.saveToDisk();
+
+    logAdminAction(
+      adminUsername || 'SuperAdmin',
+      'Update All Game House Rules & Win %',
+      `Admin updated house bet limits and client win percentages for ${rules.length} games`,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    return res.json({ success: true, message: 'Game house rules and win percentages saved successfully!' });
+  });
+
+  app.post('/api/admin/game-house-rules/single', (req, res) => {
+    const { rule, adminUsername } = req.body;
+    if (!rule || !rule.id) {
+      return res.status(400).json({ error: 'Invalid rule payload' });
+    }
+
+    applySingleHouseRule(rule);
+    db.saveToDisk();
+
+    logAdminAction(
+      adminUsername || 'SuperAdmin',
+      'Update Game House Rule',
+      `Admin updated ${rule.name || rule.id}: Min ₹${rule.minBet}, Max ₹${rule.maxBet}, Client Win: ${rule.clientWinRatePercent}%`,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    return res.json({ success: true, rule, message: `${rule.name || rule.id} house settings updated!` });
+  });
+
   // Game Engine Endpoints for User Game Engines
   app.post('/api/game/mines/start', (req, res) => {
     const { uid, numMines = 2, betAmount = 10 } = req.body;
@@ -4483,9 +4704,18 @@ Assistant Reply:`;
 
     db.users.delete(uid);
     if (user.id) db.users.delete(user.id);
+    const cleanUid = String(uid).replace(/^u-/, '');
+    db.users.delete(cleanUid);
+    db.users.delete(`u-${cleanUid}`);
+    for (const [k, u] of db.users.entries()) {
+      if (u && (String(u.uid) === cleanUid || String(u.id) === uid || String(u.id) === `u-${cleanUid}` || String(u.uid) === uid)) {
+        db.users.delete(k);
+      }
+    }
     db.saveToDisk();
 
     // Permanently remove from Cloud Firestore only when Admin deletes
+    await deleteUserPermanently(cleanUid);
     await deleteUserPermanently(uid);
 
     logAdminAction(

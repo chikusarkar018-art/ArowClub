@@ -8,7 +8,7 @@ import {
   Power, LogOut, Menu, X, Search, Maximize, RefreshCw, ChevronDown,
   Sparkles, CheckCircle2, PhoneCall, Send, Radio, Mail, MessageSquare,
   Sliders, Crown, CreditCard, Gift, Building, Percent, Moon,
-  FileSpreadsheet
+  FileSpreadsheet, SlidersHorizontal
 } from 'lucide-react';
 import { AdminTabType } from '../../types.js';
 import { UserLogo } from '../user/UserLogo.js';
@@ -137,6 +137,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       icon: Sliders,
       highlight: true,
       badge: null,
+    },
+    {
+      id: 'house_bet_winning_control',
+      label: 'House Bet & Win % Control (बेट लिमिट & विनिंग %)',
+      icon: SlidersHorizontal,
+      highlight: true,
+      badge: 'NEW',
+      badgeColor: 'bg-emerald-500 text-black font-extrabold',
     },
     {
       id: 'prediction_chat',
@@ -279,6 +287,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     switch (currentTab) {
       case 'dashboard': return 'Dashboard';
       case 'game_control': return 'Game Control Center';
+      case 'house_bet_winning_control': return 'Game House Bet Limits & Client Winning % Control';
       case 'game_winning_cut': return 'Game Tax & Cut Settings';
       case 'game_management': return 'Game Management';
       case 'users_management': return 'Users Management';

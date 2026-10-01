@@ -7,6 +7,7 @@ export type AdminTabType =
   | 'dashboard'
   | 'google_sheet_ledger'
   | 'game_control'
+  | 'house_bet_winning_control'
   | 'game_winning_cut'
   | 'prediction_chat'
   | 'gift_codes'
@@ -29,6 +30,22 @@ export type AdminTabType =
   | 'settings'
   | 'admin_management'
   | 'maintenance_mode';
+
+// ==================== GAME HOUSE RULES & CLIENT WINNING % TYPES ====================
+export interface GameHouseRule {
+  id: string; // e.g. 'wingo_30s', 'aviator', 'mines', 'roulette', etc.
+  name: string;
+  hindiName?: string;
+  category: 'wingo' | 'crash' | 'mines' | 'casino' | 'cards' | 'board';
+  minBet: number;
+  maxBet: number;
+  maxPayout: number;
+  clientWinRatePercent: number; // 0 to 100
+  houseEdgePercent: number; // 0 to 100
+  mode: 'auto_managed' | 'house_best' | 'balanced' | 'player_favor' | 'force_win';
+  isActive: boolean;
+  description?: string;
+}
 
 // ==================== GOOGLE SHEET LEDGER TYPES ====================
 export interface GoogleSheetDepositRow {

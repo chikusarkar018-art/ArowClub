@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext.js';
 import {
   ArrowDownCircle, CheckCircle2, XCircle, Search, Filter,
   Download, Eye, Clock, Check, X, Copy, ExternalLink,
-  ShieldCheck, AlertCircle, RefreshCw, FileText
+  ShieldCheck, AlertCircle, RefreshCw, FileText, RotateCw, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { DepositRequest } from '../../types.js';
 import { PaginationControl } from './PaginationControl.js';
@@ -21,6 +21,8 @@ export const DepositManagementView: React.FC = () => {
   const [approveModalItem, setApproveModalItem] = useState<DepositRequest | null>(null);
   const [rejectModalItem, setRejectModalItem] = useState<DepositRequest | null>(null);
   const [viewProofItem, setViewProofItem] = useState<DepositRequest | null>(null);
+  const [proofZoom, setProofZoom] = useState<number>(1);
+  const [proofRotation, setProofRotation] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('Invalid UTR / Payment not received in bank');
   const [customRejectReason, setCustomRejectReason] = useState('');
@@ -127,6 +129,65 @@ export const DepositManagementView: React.FC = () => {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     showToast(`${label} copied to clipboard!`, 'success');
+  };
+
+  const downloadProofSafely = (dataUrl: string, filename = 'payment-slip.png') => {
+    try {
+      if (dataUrl.startsWith('data:')) {
+        const parts = dataUrl.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        showToast?.('Slip downloaded successfully', 'success');
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast?.('Slip downloaded successfully', 'success');
+    } catch (err) {
+      console.error('Download failed:', err);
+      showToast?.('Failed to download slip', 'error');
+    }
+  };
+
+  const openProofInNewSafeTab = (dataUrl: string) => {
+    try {
+      if (dataUrl.startsWith('data:')) {
+        const parts = dataUrl.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        return;
+      }
+      window.open(dataUrl, '_blank');
+    } catch (err) {
+      console.error('Open safe tab error:', err);
+      showToast?.('Please use the Fullscreen Inspector to check the slip', 'info');
+    }
   };
 
   const displayList = deposits;
@@ -659,33 +720,118 @@ export const DepositManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= VIEW PROOF MODAL ================= */}
+      {/* ================= HIGH-RESOLUTION VIEW PROOF MODAL ================= */}
       {viewProofItem && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#15151c] border border-[#2e2e3a] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#282834] pb-3">
-              <h3 className="font-bold text-white text-base">Payment Slip / Proof</h3>
+        <div className="fixed inset-0 z-[999999] bg-black/95 backdrop-blur-md flex flex-col p-3 sm:p-5 animate-fade-in select-none">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg shrink-0">
+                🧾
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white text-sm sm:text-base">Payment Slip / Proof Inspector</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-amber-400 font-bold">
+                    UID: {viewProofItem.uid}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-400 font-bold">
+                    ₹{Number(viewProofItem.amount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  UTR: <span className="font-mono text-white font-bold">{viewProofItem.utrNumber || 'N/A'}</span> • Submitted: {new Date(viewProofItem.createdAt).toLocaleString('en-IN')}
+                </p>
+              </div>
+            </div>
+
+            {/* Inspector Controls */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
+                type="button"
+                onClick={() => setProofZoom(prev => Math.min(3.5, parseFloat((prev + 0.25).toFixed(2))))}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5 text-amber-400" />
+                <span>Zoom +</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setProofZoom(prev => Math.max(0.5, parseFloat((prev - 0.25).toFixed(2))))}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5 text-amber-400" />
+                <span>Zoom -</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setProofZoom(1); setProofRotation(0); }}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition cursor-pointer"
+                title="Reset zoom"
+              >
+                Reset ({Math.round(proofZoom * 100)}%)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setProofRotation(prev => (prev + 90) % 360)}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Rotate 90 degrees"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Rotate</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openProofInNewSafeTab((viewProofItem as any).proofUrl || (viewProofItem as any).screenshotUrl)}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Open in new safe window"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                <span>New Tab</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadProofSafely((viewProofItem as any).proofUrl || (viewProofItem as any).screenshotUrl, `deposit-slip-${viewProofItem.uid}-${viewProofItem.utrNumber}.png`)}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer"
+                title="Download original slip"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setViewProofItem(null)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white transition cursor-pointer ml-1"
+                title="Close Inspector (or press Escape)"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="rounded-xl overflow-hidden border border-[#2e2e3a] max-h-80 bg-black flex items-center justify-center">
+          </div>
+
+          {/* Canvas Area */}
+          <div
+            onClick={() => setViewProofItem(null)}
+            className="flex-1 flex items-center justify-center overflow-auto p-4 cursor-zoom-out"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-full max-h-full transition-transform duration-200 ease-out cursor-default"
+              style={{ transform: `scale(${proofZoom}) rotate(${proofRotation}deg)` }}
+            >
               <img
                 src={(viewProofItem as any).proofUrl || (viewProofItem as any).screenshotUrl}
-                alt="Deposit Proof"
-                className="max-h-80 w-auto object-contain"
+                alt="Deposit Slip Proof"
+                className="max-h-[82vh] max-w-[92vw] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.9)] border-2 border-zinc-700/80 bg-zinc-950"
               />
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setViewProofItem(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-700 hover:bg-zinc-600 text-white cursor-pointer"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

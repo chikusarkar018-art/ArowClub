@@ -1015,6 +1015,25 @@ class ApiService {
     return this.request('/api/admin/all-game-controls');
   }
 
+  // ===================== GAME HOUSE RULES & CLIENT WINNING % APIS =====================
+  async getGameHouseRules(): Promise<{ success: boolean; rules: import('../types.js').GameHouseRule[] }> {
+    return this.request('/api/admin/game-house-rules');
+  }
+
+  async updateGameHouseRules(rules: import('../types.js').GameHouseRule[], adminUsername?: string): Promise<{ success: boolean; rules: import('../types.js').GameHouseRule[]; message: string }> {
+    return this.request('/api/admin/game-house-rules', {
+      method: 'POST',
+      body: JSON.stringify({ rules, adminUsername }),
+    });
+  }
+
+  async updateSingleGameHouseRule(rule: import('../types.js').GameHouseRule, adminUsername?: string): Promise<{ success: boolean; rule: import('../types.js').GameHouseRule; message: string }> {
+    return this.request('/api/admin/game-house-rules/single', {
+      method: 'POST',
+      body: JSON.stringify({ rule, adminUsername }),
+    });
+  }
+
   async getLudoStatus(): Promise<{ isActive: boolean; maintenanceNotice: string; botDifficulty?: string }> {
     return this.request('/api/game/ludo/status');
   }

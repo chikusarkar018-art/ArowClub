@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, X, Phone, Mail, Calendar, ArrowRight,
   RefreshCw, UserPlus, Sparkles, Key, ArrowDownCircle, ArrowUpCircle,
   Copy, Check, Gamepad2, Sliders, PlayCircle, BarChart3, TrendingUp, TrendingDown,
-  Info, ShieldCheck, Layers, Coins, Lock, Unlock, AlertTriangle
+  Info, ShieldCheck, Layers, Coins, Lock, Unlock, AlertTriangle, Trash2
 } from 'lucide-react';
 import { AdminUserSummary } from '../../types.js';
 import { PaginationControl } from './PaginationControl.js';
@@ -103,6 +103,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
   const [ccStatus, setCcStatus] = useState<'active' | 'blocked'>('active');
   const [ccReason, setCcReason] = useState('Admin Review');
   const [savingCc, setSavingCc] = useState(false);
+
+  // Delete User Confirmation Modal
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AdminUserSummary | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  // Quick Delete by UID Modal
+  const [showQuickDeleteModal, setShowQuickDeleteModal] = useState(false);
+  const [quickDeleteUidInput, setQuickDeleteUidInput] = useState('');
+  const [quickDeleteSearchResult, setQuickDeleteSearchResult] = useState<AdminUserSummary | null>(null);
 
   const fetchUsers = async (silent = false) => {
     try {
@@ -402,6 +412,33 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
     }
   };
 
+  // Open Delete User Confirmation Modal
+  const handleOpenDeleteModal = (u: AdminUserSummary) => {
+    setUserToDelete(u);
+    setShowDeleteUserModal(true);
+  };
+
+  // Confirm and Execute User Deletion
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeletingUser(true);
+    try {
+      const res = await api.adminDeleteUser(userToDelete.uid, admin?.username || 'SuperAdmin');
+      if (res?.success) {
+        showToast(`User UID ${userToDelete.uid} (${userToDelete.username}) deleted successfully!`, 'success');
+        setUsers(prev => prev.filter(u => u.uid !== userToDelete.uid));
+        setShowDeleteUserModal(false);
+        setUserToDelete(null);
+      } else {
+        showToast(res?.error || 'Failed to delete user', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete user', 'error');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -506,6 +543,19 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
               className="p-2 rounded-xl bg-[#181a2e] border border-[#2b304c] text-slate-300 hover:text-white transition hover:border-indigo-500"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+            </button>
+
+            <button
+              onClick={() => {
+                setQuickDeleteUidInput('');
+                setQuickDeleteSearchResult(null);
+                setShowQuickDeleteModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition shadow-sm cursor-pointer"
+              title="Delete user account by UID (यूजर आईडी डालकर डिलीट करें)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Delete UID (यूजर हटाएं)</span>
             </button>
 
             <button
@@ -705,6 +755,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                           >
                             CC
                           </button>
+
+                          {/* 7. DEL (Delete User ID) - Crimson Red Square */}
+                          <button
+                            onClick={() => handleOpenDeleteModal(u)}
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Delete User ID Permanently (DEL)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -776,6 +835,17 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                   }`}
                 >
                   {selectedUser.status === 'blocked' ? 'Unblock User' : 'Block User'}
+                </button>
+                <button
+                  onClick={() => {
+                    handleOpenDeleteModal(selectedUser);
+                    setSelectedUser(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm cursor-pointer"
+                  title="Delete user account permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
                 </button>
               </div>
             </div>
@@ -1838,6 +1908,252 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= DELETE USER CONFIRMATION MODAL ================= */}
+      {showDeleteUserModal && userToDelete && (
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#12131a] border border-rose-500/40 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-rose-500/20 pb-3">
+              <div className="flex items-center gap-2.5 text-rose-400">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Delete User ID (यूजर डिलीट करें)</h3>
+                  <p className="text-[11px] text-zinc-400">Permanent removal of account & cloud data</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!deletingUser) {
+                    setShowDeleteUserModal(false);
+                    setUserToDelete(null);
+                  }
+                }}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Warning Box */}
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-rose-300 font-bold">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>सावधानी: यह यूजर स्थायी रूप से डिलीट हो जाएगा!</span>
+              </div>
+              <p className="text-zinc-300 leading-relaxed text-[11px]">
+                क्या आप वाकई यूजर <strong className="text-white font-mono">UID: {userToDelete.uid}</strong> ({userToDelete.username}) का अकाउंट डिलीट करना चाहते हैं?
+                इसका वॉलेट बैलेंस, गेम रिकॉर्ड और क्लाउड डेटाबेस एंट्री हमेशा के लिए हटा दी जाएगी।
+              </p>
+            </div>
+
+            {/* User Details Summary */}
+            <div className="bg-[#181924] border border-[#2b2d3d] rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-zinc-400">User ID (UID):</span>
+                <span className="font-mono text-amber-400 font-bold">{userToDelete.uid}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Username:</span>
+                <span className="text-white font-semibold">{userToDelete.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Phone Number:</span>
+                <span className="font-mono text-zinc-300">{userToDelete.phone || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Current Wallet Balance:</span>
+                <span className="font-mono text-emerald-400 font-bold">₹ {Number(userToDelete.walletBalance || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2.5 justify-end pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteUserModal(false);
+                  setUserToDelete(null);
+                }}
+                disabled={deletingUser}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition cursor-pointer"
+              >
+                Cancel (रद्द करें)
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                disabled={deletingUser}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {deletingUser ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>हाँ, यूजर डिलीट करें (Confirm Delete)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= QUICK DELETE USER BY UID MODAL ================= */}
+      {showQuickDeleteModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#12131a] border border-rose-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-rose-500/20 pb-3">
+              <div className="flex items-center gap-2.5 text-rose-400">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Quick Delete User by UID (यूजर आईडी से डिलीट करें)</h3>
+                  <p className="text-[11px] text-zinc-400">Enter User ID (UID) to permanently delete account</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuickDeleteModal(false);
+                  setQuickDeleteUidInput('');
+                  setQuickDeleteSearchResult(null);
+                }}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Input search box */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Enter User ID (UID), Username, or Phone Number:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. 73923178 or Member_1200"
+                  value={quickDeleteUidInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setQuickDeleteUidInput(val);
+                    if (val.trim()) {
+                      const clean = val.trim().toLowerCase();
+                      const found = users.find(
+                        (u) =>
+                          u.uid.toLowerCase() === clean ||
+                          u.username.toLowerCase() === clean ||
+                          (u.phone && u.phone.includes(clean))
+                      );
+                      setQuickDeleteSearchResult(found || null);
+                    } else {
+                      setQuickDeleteSearchResult(null);
+                    }
+                  }}
+                  className="flex-1 bg-[#181a2e] border border-[#2b304c] rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 font-mono"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const clean = quickDeleteUidInput.trim();
+                    if (!clean) return;
+                    try {
+                      setLoading(true);
+                      const data = await api.getAdminUsers(clean);
+                      if (data?.users && data.users.length > 0) {
+                        setQuickDeleteSearchResult(data.users[0]);
+                      } else {
+                        showToast('No user found matching this UID/phone', 'error');
+                        setQuickDeleteSearchResult(null);
+                      }
+                    } catch (err: any) {
+                      showToast(err.message || 'Error searching user', 'error');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Find</span>
+                </button>
+              </div>
+            </div>
+
+            {/* If user found */}
+            {quickDeleteSearchResult ? (
+              <div className="space-y-3 pt-2">
+                <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400">User ID (UID):</span>
+                    <span className="font-mono text-amber-400 font-black text-sm">{quickDeleteSearchResult.uid}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Username:</span>
+                    <span className="text-white font-bold">{quickDeleteSearchResult.username}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Mobile Phone:</span>
+                    <span className="font-mono text-zinc-300">{quickDeleteSearchResult.phone || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Current Balance:</span>
+                    <span className="font-mono text-emerald-400 font-black">
+                      ₹ {Number(quickDeleteSearchResult.walletBalance || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Status:</span>
+                    <span className={`font-bold ${quickDeleteSearchResult.status === 'active' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {quickDeleteSearchResult.status?.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-zinc-900/80 rounded-xl border border-white/5 text-[11px] text-zinc-400 leading-relaxed">
+                  ⚠️ यह यूजर हमेशा के लिए डेटाबेस और क्लाउड स्टोरेज से डिलीट हो जाएगा। इस प्रक्रिया को वापस नहीं लाया जा सकता।
+                </div>
+
+                <div className="flex gap-2.5 justify-end pt-2 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickDeleteModal(false);
+                      setQuickDeleteSearchResult(null);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleOpenDeleteModal(quickDeleteSearchResult);
+                      setShowQuickDeleteModal(false);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Proceed to Delete (डिलीट करें)</span>
+                  </button>
+                </div>
+              </div>
+            ) : quickDeleteUidInput.trim() ? (
+              <div className="p-4 bg-zinc-900/60 rounded-xl text-center text-xs text-zinc-400">
+                Type exact UID or click Find to verify user details before deleting.
+              </div>
+            ) : null}
           </div>
         </div>
       )}
