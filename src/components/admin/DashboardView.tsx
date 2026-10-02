@@ -765,7 +765,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <span className="text-xs font-bold text-emerald-400">{stats?.totalBets ?? 0} Bets</span>
             </div>
 
-            {/* Custom SVG Graph matching screenshot */}
+            {/* Custom SVG Graph */}
             <div className="h-44 w-full relative">
               <svg className="w-full h-full" viewBox="0 0 400 160" preserveAspectRatio="none">
                 <defs>
@@ -892,7 +892,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 1: Add User */}
               <button
                 onClick={() => setShowAddUserModal(true)}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 transition group cursor-pointer"
               >
                 <PlusCircle className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Add User</span>
@@ -901,7 +901,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 2: Send Notification */}
               <button
                 onClick={() => onNavigate('notification')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 transition group cursor-pointer"
               >
                 <Send className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Send Notification</span>
@@ -910,7 +910,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 3: Add Balance */}
               <button
                 onClick={() => setShowAddBalanceModal(true)}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 transition group cursor-pointer"
               >
                 <DollarSign className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Add Balance</span>
@@ -919,7 +919,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 4: Game Settings */}
               <button
                 onClick={() => onNavigate('settings')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 transition group cursor-pointer"
               >
                 <Sliders className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Game Settings</span>
@@ -928,7 +928,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 5: View Reports */}
               <button
                 onClick={() => onNavigate('reports_analytics')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/30 text-orange-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/30 text-orange-400 transition group cursor-pointer"
               >
                 <FileText className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">View Reports</span>
@@ -937,7 +937,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 6: Support Links */}
               <button
                 onClick={() => onNavigate('support_links')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 transition group cursor-pointer"
               >
                 <Headphones className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Support Links</span>
@@ -946,7 +946,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 7: Maintenance Mode */}
               <button
                 onClick={() => onNavigate('maintenance_mode')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/30 text-pink-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/30 text-pink-400 transition group cursor-pointer"
               >
                 <Power className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Maintenance</span>
@@ -955,7 +955,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               {/* Action 8: Logout */}
               <button
                 onClick={() => logoutAdmin()}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 transition group"
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 transition group cursor-pointer"
               >
                 <LogOut className="w-5 h-5 mb-1.5 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] font-bold text-white">Logout</span>
@@ -1048,41 +1048,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                   placeholder="e.g. Rahul Kumar"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#181a2e] border border-[#2b304c] text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Mobile Phone Number</label>
+                <label className="block text-slate-300 font-semibold mb-1">Phone Number</label>
                 <input
-                  type="tel"
+                  type="text"
                   required
                   placeholder="e.g. 9876543210"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#181a2e] border border-[#2b304c] text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Initial Password</label>
+                <label className="block text-slate-300 font-semibold mb-1">Default Password</label>
                 <input
                   type="text"
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#181a2e] border border-[#2b304c] text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                 />
               </div>
-              <div className="flex gap-3 justify-end pt-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddUserModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                  className="px-4 py-2 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition"
                 >
                   Create User
                 </button>
@@ -1098,43 +1098,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <div className="bg-[#121422] border border-[#23273c] rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-emerald-400" />
-              Direct Balance Credit
+              Quick Add User Balance
             </h3>
             <form onSubmit={handleAddBalance} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">User UID or Phone Number</label>
+                <label className="block text-slate-300 font-semibold mb-1">User UID / ID</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 100001 or mobile"
+                  placeholder="e.g. 12345 or u-12345"
                   value={balanceUid}
                   onChange={(e) => setBalanceUid(e.target.value)}
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#181a2e] border border-[#2b304c] text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Amount to Add (₹)</label>
+                <label className="block text-slate-300 font-semibold mb-1">Amount (₹)</label>
                 <input
                   type="number"
                   required
                   min="1"
-                  placeholder="e.g. 500"
                   value={balanceAmount}
                   onChange={(e) => setBalanceAmount(e.target.value)}
-                  className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#181a2e] border border-[#2b304c] text-white rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                 />
               </div>
-              <div className="flex gap-3 justify-end pt-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddBalanceModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                  className="px-4 py-2 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition"
                 >
                   Credit Balance
                 </button>

@@ -41,6 +41,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked'>((initialStatusFilter as any) || 'all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
+  const [exposureSort, setExposureSort] = useState<'none' | 'desc' | 'asc'>('none');
 
   // Top-Up / Balance Modal
   const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -113,6 +114,23 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
   const [showQuickDeleteModal, setShowQuickDeleteModal] = useState(false);
   const [quickDeleteUidInput, setQuickDeleteUidInput] = useState('');
   const [quickDeleteSearchResult, setQuickDeleteSearchResult] = useState<AdminUserSummary | null>(null);
+
+  // Radhe Exchange Client List State
+  const [searchUidInput, setSearchUidInput] = useState('');
+  const [pageSize, setPageSize] = useState<number>(25);
+
+  const handleToggleBetLock = async (u: AdminUserSummary) => {
+    try {
+      const isLocked = Array.isArray(u.disabledGames) && u.disabledGames.length > 0;
+      const allGames = ['wingo_30s', 'wingo_1m', 'wingo_3m', 'wingo_5m', 'aviator', 'mines', 'roulette', 'seven_up_down', 'teen_patti', 'chicken_road', 'plinko'];
+      const newDisabledGames = isLocked ? [] : allGames;
+      await api.updateAdminUserGameControl(u.uid, newDisabledGames, admin?.username || 'SuperAdmin');
+      showToast(`Bet Lock ${!isLocked ? 'ENABLED' : 'DISABLED'} for ${u.username}`, 'success');
+      setUsers(prev => prev.map(item => item.uid === u.uid ? { ...item, disabledGames: newDisabledGames } : item));
+    } catch (err: any) {
+      showToast(err.message || 'Failed to toggle bet lock', 'error');
+    }
+  };
 
   const fetchUsers = async (silent = false) => {
     try {
@@ -316,25 +334,33 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
 
   // Open Exposure & Game Breakdown Modal
   const handleOpenExposureModal = async (u: AdminUserSummary) => {
+    if (!u) return;
     setExposureUser(u);
     setShowExposureModal(true);
+    // Instant fallback state so the modal appears immediately without delay
+    setExposureData({
+      uid: u.uid,
+      username: u.username,
+      walletBalance: Number(u.walletBalance || 0),
+      exposure: Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0),
+      activeExposure: Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0),
+      totalBet: Number(u.totalBet || 0),
+      totalWin: Number(u.totalWin || 0),
+      netProfitLoss: (u as any).netProfitLoss !== undefined 
+        ? Number((u as any).netProfitLoss) 
+        : (Number(u.totalWin || 0) - Number(u.totalBet || 0)),
+      gameBreakdown: u.gameBreakdown || {},
+      activeBets: [],
+      recentBets: [],
+    });
     setExposureLoading(true);
     try {
       const res = await api.getAdminUserExposure(u.uid);
-      setExposureData(res);
+      if (res) {
+        setExposureData(res);
+      }
     } catch (err: any) {
-      // Fallback to locally present breakdown if already loaded
-      setExposureData({
-        uid: u.uid,
-        username: u.username,
-        walletBalance: u.walletBalance,
-        exposure: u.exposure !== undefined ? u.exposure : u.activeExposure || 0,
-        activeExposure: u.activeExposure || 0,
-        totalBet: u.totalBet || 0,
-        totalWin: u.totalWin || 0,
-        gameBreakdown: u.gameBreakdown || {},
-        recentBets: [],
-      });
+      console.warn('getAdminUserExposure error:', err);
     } finally {
       setExposureLoading(false);
     }
@@ -439,240 +465,632 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
     }
   };
 
-  const filteredUsers = users.filter(u => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      u.uid.toLowerCase().includes(q) ||
-      u.username.toLowerCase().includes(q) ||
-      (u.phone && u.phone.toLowerCase().includes(q))
-    );
+  const filteredUsers = users.filter((u) => {
+    // Universal matcher for UID, Phone, UPI ID, Bank Accounts, Username, Email
+    const matchesUser = (itemQuery: string) => {
+      const q = itemQuery.trim().toLowerCase();
+      if (!q) return true;
+      const uidMatch = u.uid.toLowerCase().includes(q);
+      const usernameMatch = u.username.toLowerCase().includes(q);
+      const phoneMatch =
+        (u.phone && String(u.phone).toLowerCase().includes(q)) ||
+        ((u as any).phoneNumber && String((u as any).phoneNumber).toLowerCase().includes(q)) ||
+        ((u as any).mobile && String((u as any).mobile).toLowerCase().includes(q));
+      const emailMatch = u.email && u.email.toLowerCase().includes(q);
+      const upiMatch =
+        ((u as any).upiId && String((u as any).upiId).toLowerCase().includes(q)) ||
+        ((u as any).upi && String((u as any).upi).toLowerCase().includes(q)) ||
+        (Array.isArray((u as any).bankAccounts) &&
+          (u as any).bankAccounts.some(
+            (b: any) =>
+              (b.upiId && String(b.upiId).toLowerCase().includes(q)) ||
+              (b.accountNumber && String(b.accountNumber).toLowerCase().includes(q)) ||
+              (b.accountHolder && String(b.accountHolder).toLowerCase().includes(q)) ||
+              (b.bankName && String(b.bankName).toLowerCase().includes(q)) ||
+              (b.ifsc && String(b.ifsc).toLowerCase().includes(q))
+          ));
+
+      return uidMatch || usernameMatch || phoneMatch || emailMatch || upiMatch;
+    };
+
+    if (searchUidInput.trim() && !matchesUser(searchUidInput)) {
+      return false;
+    }
+    if (searchQuery.trim() && !matchesUser(searchQuery)) {
+      return false;
+    }
+    return true;
   });
 
+  // Calculate totals matching the Radhe Exchange summary row
+  const totalCreditReference = filteredUsers.reduce(
+    (sum, u) => sum + (Number((u as any).creditReference) || 50000),
+    0
+  );
+  const totalBalance = filteredUsers.reduce(
+    (sum, u) => sum + (Number(u.walletBalance) || 0),
+    0
+  );
+  const totalPendingBal = filteredUsers.reduce(
+    (sum, u) => sum + ((Number(u.walletBalance) || 0) - (Number((u as any).creditReference) || 50000)),
+    0
+  );
+  const totalAvailableBal = filteredUsers.reduce(
+    (sum, u) => {
+      const exp = Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0);
+      return sum + Math.max(0, (Number(u.walletBalance) || 0) - Math.abs(exp));
+    },
+    0
+  );
+  const totalPnl = filteredUsers.reduce(
+    (sum, u) => {
+      const uBet = Number(u.totalBet || 0);
+      const uWin = Number(u.totalWin || 0);
+      const p = (u as any).netProfitLoss !== undefined ? Number((u as any).netProfitLoss) : (uWin - uBet);
+      return sum + p;
+    },
+    0
+  );
+  const totalExposure = filteredUsers.reduce(
+    (sum, u) => sum + Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0),
+    0
+  );
+
   const totalUsersCount = users.length;
-  const activeUsersCount = users.filter(u => u.status !== 'blocked').length;
-  const blockedUsersCount = users.filter(u => u.status === 'blocked').length;
-  const onlineUsersCount = users.filter(u => u.status !== 'blocked').length;
+  const activeUsersCount = users.filter((u) => u.status !== 'blocked').length;
+  const blockedUsersCount = users.filter((u) => u.status === 'blocked').length;
+  const onlineUsersCount = activeUsersCount;
+
+  // Sort and pagination calculation
+  let displayUsers = [...filteredUsers];
+  if (exposureSort === 'desc') {
+    displayUsers.sort((a, b) => Number(b.exposure !== undefined ? b.exposure : b.activeExposure || 0) - Number(a.exposure !== undefined ? a.exposure : a.activeExposure || 0));
+  } else if (exposureSort === 'asc') {
+    displayUsers.sort((a, b) => Number(a.exposure !== undefined ? a.exposure : a.activeExposure || 0) - Number(b.exposure !== undefined ? b.exposure : b.activeExposure || 0));
+  }
+  const totalPages = Math.max(1, Math.ceil(displayUsers.length / pageSize));
+  const paginatedUsers = displayUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
-    <div className="space-y-6">
-      {/* ================= TOP 4 KPI CARDS ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Users */}
-        <div className="bg-[#121422] border border-[#23273c] rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
-          <div className="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
-            <Users className="w-6 h-6" />
+    <div className="space-y-4">
+      {/* ================= TOP 4 KPI CARDS (CLEAN LIGHT/CONTRAST) ================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Card 1: Total Clients */}
+        <div className="bg-white border border-slate-200 rounded-lg p-3.5 flex items-center gap-3 shadow-xs">
+          <div className="w-10 h-10 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-[#004d5a] shrink-0">
+            <Users className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-medium">Total Users</div>
-            <div className="text-2xl font-bold text-white font-mono mt-0.5">{totalUsersCount.toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-slate-500 font-semibold uppercase">Total Clients</div>
+            <div className="text-xl font-black text-slate-800 font-mono">{totalUsersCount.toLocaleString('en-IN')}</div>
           </div>
         </div>
 
-        {/* Card 2: Active Users */}
-        <div className="bg-[#121422] border border-[#23273c] rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
-            <UserCheck className="w-6 h-6" />
+        {/* Card 2: Active Clients */}
+        <div className="bg-white border border-slate-200 rounded-lg p-3.5 flex items-center gap-3 shadow-xs">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+            <UserCheck className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-medium">Active Users</div>
-            <div className="text-2xl font-bold text-emerald-400 font-mono mt-0.5">{activeUsersCount.toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-slate-500 font-semibold uppercase">Active Clients</div>
+            <div className="text-xl font-black text-emerald-600 font-mono">{activeUsersCount.toLocaleString('en-IN')}</div>
           </div>
         </div>
 
-        {/* Card 3: Blocked Users */}
-        <div className="bg-[#121422] border border-[#23273c] rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
-          <div className="w-12 h-12 rounded-xl bg-rose-600/20 border border-rose-500/30 flex items-center justify-center text-rose-400 flex-shrink-0">
-            <UserX className="w-6 h-6" />
+        {/* Card 3: Locked Clients */}
+        <div className="bg-white border border-slate-200 rounded-lg p-3.5 flex items-center gap-3 shadow-xs">
+          <div className="w-10 h-10 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+            <UserX className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-medium">Blocked Users</div>
-            <div className="text-2xl font-bold text-rose-400 font-mono mt-0.5">{blockedUsersCount.toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-slate-500 font-semibold uppercase">U-Locked Clients</div>
+            <div className="text-xl font-black text-rose-600 font-mono">{blockedUsersCount.toLocaleString('en-IN')}</div>
           </div>
         </div>
 
-        {/* Card 4: Online Users */}
-        <div className="bg-[#121422] border border-[#23273c] rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
-          <div className="w-12 h-12 rounded-xl bg-cyan-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 flex-shrink-0">
-            <Globe className="w-6 h-6" />
+        {/* Card 4: Total Portfolio Balance */}
+        <div className="bg-white border border-slate-200 rounded-lg p-3.5 flex items-center gap-3 shadow-xs">
+          <div className="w-10 h-10 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-700 shrink-0">
+            <DollarSign className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-medium">Online Users</div>
-            <div className="text-2xl font-bold text-cyan-400 font-mono mt-0.5">{onlineUsersCount}</div>
+            <div className="text-[11px] text-slate-500 font-semibold uppercase">Total Balance</div>
+            <div className="text-xl font-black text-cyan-800 font-mono">₹ {totalBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
           </div>
         </div>
       </div>
 
-      {/* ================= USERS TABLE CONTAINER ================= */}
-      <div className="bg-[#121422] border border-[#23273c] rounded-2xl p-5 shadow-lg">
-        {/* Search & Action Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative w-full sm:w-80">
+      {/* =========================================================================
+          RADHE EXCHANGE CLIENT LIST CONTAINER (Exact visual match to screenshot)
+      ========================================================================= */}
+      <div className="bg-white border border-slate-300 rounded shadow-xs overflow-hidden">
+        {/* Top Control Bar: Title, Search Inputs, Export Icons, Entries, Add Client Account */}
+        <div className="p-3 bg-[#fdfdfd] border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+          {/* Left: Heading + Search Inputs + Export Badges */}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-bold text-slate-800 mr-2 tracking-tight">
+              Client List
+            </h2>
+
+            {/* Quick UID / Phone / UPI Search input */}
+            <div className="relative">
               <input
                 type="text"
-                placeholder="Search by User ID, Name, Mobile..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#181a2e] border border-[#2b304c] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                placeholder="UID / Phone / UPI"
+                value={searchUidInput}
+                onChange={(e) => {
+                  setSearchUidInput(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-32 sm:w-36 bg-white border border-slate-300 rounded px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#004d5a] font-mono shadow-inner pr-6"
+                title="Search by UID, Phone Number, or UPI ID"
               />
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              {searchUidInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchUidInput('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs px-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-            
-            {/* Live Auto-Sync Badge */}
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold flex-shrink-0" title="Auto-updating instantly when users register or data updates">
-              <span className={`w-2 h-2 rounded-full bg-emerald-400 ${isLiveSyncing ? 'animate-ping' : 'animate-pulse'}`} />
-              <span>Live Auto-Sync</span>
+
+            {/* General Search by Client (Phone, UPI, Username, UID, Bank) */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search Phone, UPI, Name..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-40 sm:w-56 bg-white border border-slate-300 rounded px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#004d5a] pr-6"
+                title="Search by Phone Number, UPI ID, UID, Username, or Bank Account"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs px-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* 4 Export Badges matching screenshot: CSV, PDF, CSV ALL, PDF ALL */}
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                type="button"
+                onClick={() => showToast('Exporting Client List to CSV...', 'success')}
+                className="px-1.5 py-0.5 rounded bg-[#2e7d32] hover:bg-[#1b5e20] text-white text-[10px] font-bold shadow-xs flex items-center gap-0.5 cursor-pointer"
+                title="Export CSV"
+              >
+                <span>📊</span>
+                <span>CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => showToast('Exporting Client List to PDF...', 'success')}
+                className="px-1.5 py-0.5 rounded bg-[#c62828] hover:bg-[#b71c1c] text-white text-[10px] font-bold shadow-xs flex items-center gap-0.5 cursor-pointer"
+                title="Export PDF"
+              >
+                <span>📄</span>
+                <span>PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => showToast('Exporting All Client Records to CSV...', 'success')}
+                className="px-1.5 py-0.5 rounded bg-[#2e7d32] hover:bg-[#1b5e20] text-white text-[10px] font-bold shadow-xs flex items-center gap-0.5 cursor-pointer"
+                title="Export CSV ALL"
+              >
+                <span>📊</span>
+                <span>CSV ALL</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => showToast('Exporting All Client Records to PDF...', 'success')}
+                className="px-1.5 py-0.5 rounded bg-[#c62828] hover:bg-[#b71c1c] text-white text-[10px] font-bold shadow-xs flex items-center gap-0.5 cursor-pointer"
+                title="Export PDF ALL"
+              >
+                <span>📄</span>
+                <span>PDF ALL</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-            <select
-              value={statusFilter}
-              onChange={(e: any) => setStatusFilter(e.target.value)}
-              className="bg-[#181a2e] border border-[#2b304c] text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active Only</option>
-              <option value="blocked">Blocked Only</option>
-            </select>
+          {/* Right: Show Entries, Add Client Account, Inactive List, Delete UID */}
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            <div className="flex items-center gap-1 text-slate-600 text-xs">
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs text-slate-700 focus:outline-none focus:border-[#004d5a] font-medium"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>entries</span>
+            </div>
 
+            {/* Add Client Account (Teal button) */}
             <button
-              onClick={() => fetchUsers(false)}
-              title="Refresh Users List"
-              className="p-2 rounded-xl bg-[#181a2e] border border-[#2b304c] text-slate-300 hover:text-white transition hover:border-indigo-500"
+              onClick={() => setShowAddUserModal(true)}
+              className="px-3 py-1 rounded bg-[#02848c] hover:bg-[#006f76] text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Add Client Account</span>
             </button>
 
+            {/* Inactive List / Blocked Filter */}
+            <button
+              onClick={() => setStatusFilter(statusFilter === 'blocked' ? 'all' : 'blocked')}
+              className={`px-3 py-1 rounded text-xs font-bold transition shadow-xs cursor-pointer ${
+                statusFilter === 'blocked'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                  : 'bg-[#02848c] hover:bg-[#006f76] text-white'
+              }`}
+            >
+              {statusFilter === 'blocked' ? 'All Clients' : 'Inactive List'}
+            </button>
+
+            {/* Delete UID button */}
             <button
               onClick={() => {
                 setQuickDeleteUidInput('');
                 setQuickDeleteSearchResult(null);
                 setShowQuickDeleteModal(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition shadow-sm cursor-pointer"
-              title="Delete user account by UID (यूजर आईडी डालकर डिलीट करें)"
+              className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+              title="Permanently Delete User Account by UID"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Delete UID (यूजर हटाएं)</span>
-            </button>
-
-            <button
-              onClick={() => setShowAddUserModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#5b50e6] hover:bg-[#4d42db] text-white text-xs font-bold transition shadow-sm"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Add User</span>
-            </button>
-
-            <button
-              onClick={() => showToast('Exported user list to CSV', 'success')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#181a2e] border border-[#2b304c] text-slate-300 hover:text-white text-xs font-semibold transition"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete UID</span>
             </button>
           </div>
         </div>
 
-        {/* User Table */}
+        {/* =====================================================================
+            CLIENT LIST TABLE (Dark Teal Header #035a68 + Aggregate Summary Row)
+        ===================================================================== */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs border-collapse">
+            {/* Table Header: Dark Teal #035a68 */}
             <thead>
-              <tr className="border-b border-[#1e202e] text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
-                <th className="pb-3 px-3">User ID</th>
-                <th className="pb-3 px-3">Name</th>
-                <th className="pb-3 px-3">Mobile</th>
-                <th className="pb-3 px-3">Balance</th>
-                <th className="pb-3 px-3 text-center">Exposure</th>
-                <th className="pb-3 px-3 text-center">Status</th>
-                <th className="pb-3 px-3">Registered On</th>
-                <th className="pb-3 px-3 text-center">Actions</th>
+              <tr className="bg-[#035a68] text-white font-bold text-[11px] whitespace-nowrap select-none">
+                <th className="py-2.5 px-3 border-r border-teal-800">
+                  <div className="flex items-center gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>UID</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800">
+                  <div className="flex items-center gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>User Name</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-center">
+                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Phone Number</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-right">
+                  <div className="flex items-center justify-end gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Balance</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-right">
+                  <div className="flex items-center justify-end gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Pending Bal.</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-right">
+                  <div className="flex items-center justify-end gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Available Bal.</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-center">
+                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Current P&L</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th
+                  onClick={() => {
+                    setExposureSort(prev => prev === 'desc' ? 'asc' : 'desc');
+                  }}
+                  className="py-2.5 px-3 border-r border-teal-800 text-right cursor-pointer hover:text-cyan-200 select-none"
+                  title="Click to sort by Exposure (High/Low)"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Exposure</span>
+                    <span className="text-[10px] opacity-80">{exposureSort === 'desc' ? '↓' : exposureSort === 'asc' ? '↑' : '↑↓'}</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-2 border-r border-teal-800 text-center">
+                  <span>U Lock</span>
+                </th>
+                <th className="py-2.5 px-2 border-r border-teal-800 text-center">
+                  <span>B Lock</span>
+                </th>
+                <th className="py-2.5 px-2 border-r border-teal-800 text-center">
+                  <span>My %</span>
+                </th>
+                <th className="py-2.5 px-3 border-r border-teal-800 text-center">
+                  <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-cyan-200">
+                    <span>Type</span>
+                    <span className="text-[10px] opacity-80">↑↓</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-center">
+                  <span>Actions</span>
+                </th>
+              </tr>
+
+              {/* Aggregate / Total Row right below header (Matching screenshot) */}
+              <tr className="bg-[#f0f4f7] border-b-2 border-slate-300 font-black text-slate-800 text-[11px] whitespace-nowrap">
+                <td className="py-2 px-3 border-r border-slate-200 text-slate-400">
+                  {/* Empty for UID */}
+                </td>
+                <td className="py-2 px-3 border-r border-slate-200 text-slate-400">
+                  {/* Empty for User Name */}
+                </td>
+                <td className="py-2 px-3 border-r border-slate-200 text-center text-slate-500 font-mono text-[10px]">
+                  {filteredUsers.length} Clients
+                </td>
+                <td className="py-2 px-3 border-r border-slate-200 text-right font-mono">
+                  {totalBalance.toFixed(2)}
+                </td>
+                <td className={`py-2 px-3 border-r border-slate-200 text-right font-mono ${totalPendingBal < 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                  {totalPendingBal.toFixed(2)}
+                </td>
+                <td className="py-2 px-3 border-r border-slate-200 text-right font-mono">
+                  {totalAvailableBal.toFixed(2)}
+                </td>
+                <td className="py-2 px-3 border-r border-slate-200 text-center font-mono">
+                  <span className={`font-bold ${totalPnl < 0 ? 'text-rose-600' : totalPnl > 0 ? 'text-emerald-700' : 'text-slate-600'}`}>
+                    {totalPnl > 0 ? `+${totalPnl.toFixed(2)}` : totalPnl.toFixed(2)}
+                  </span>
+                </td>
+                <td
+                  onClick={() => {
+                    const firstUserWithExp = filteredUsers.find(u => Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0) > 0) || filteredUsers[0];
+                    if (firstUserWithExp) handleOpenExposureModal(firstUserWithExp);
+                  }}
+                  className="py-2 px-3 border-r border-slate-200 text-right font-mono text-rose-600 font-bold cursor-pointer hover:bg-rose-100/60 transition-colors"
+                  title="Click to view client exposure"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const firstUserWithExp = filteredUsers.find(u => Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0) > 0) || filteredUsers[0];
+                      if (firstUserWithExp) handleOpenExposureModal(firstUserWithExp);
+                    }}
+                    className="cursor-pointer font-bold hover:underline"
+                  >
+                    {totalExposure > 0 ? `(${totalExposure.toFixed(2)})` : totalExposure.toFixed(2)}
+                  </button>
+                </td>
+                <td className="py-2 px-2 border-r border-slate-200"></td>
+                <td className="py-2 px-2 border-r border-slate-200"></td>
+                <td className="py-2 px-2 border-r border-slate-200"></td>
+                <td className="py-2 px-3 border-r border-slate-200"></td>
+                <td className="py-2 px-3"></td>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1e202e]">
-              {filteredUsers.length === 0 ? (
+
+            {/* Table Body */}
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
-                    <Users className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-                    <p className="font-semibold text-slate-300">No registered users found</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {searchQuery ? `No user matches query "${searchQuery}"` : 'Users will show here immediately upon registration.'}
+                  <td colSpan={13} className="py-12 text-center text-slate-500">
+                    <Users className="w-9 h-9 mx-auto text-slate-400 mb-2" />
+                    <p className="font-semibold text-slate-700">No client accounts found</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {searchQuery || searchUidInput
+                        ? `No match found for your search query`
+                        : 'Clients will appear here immediately upon registration.'}
                     </p>
-                    <div className="flex items-center justify-center gap-2 mt-4">
-                      <button
-                        onClick={() => fetchUsers(false)}
-                        className="px-3 py-1.5 rounded-xl bg-[#181a2e] border border-[#2b304c] text-xs font-semibold text-white hover:border-indigo-500"
-                      >
-                        Refresh List
-                      </button>
-                      <button
-                        onClick={() => setShowAddUserModal(true)}
-                        className="px-3 py-1.5 rounded-xl bg-[#5b50e6] text-xs font-bold text-white shadow"
-                      >
-                        Create User
-                      </button>
-                    </div>
                   </td>
                 </tr>
               ) : (
-                filteredUsers.slice((currentPage - 1) * 20, currentPage * 20).map((u, idx) => {
+                paginatedUsers.map((u, idx) => {
                   const isBlocked = u.status === 'blocked';
-                  const displayPhone = u.phone || '---';
-                  const displayDate = u.registrationDate
-                    ? (typeof u.registrationDate === 'string' && u.registrationDate.includes('/')
-                        ? u.registrationDate
-                        : new Date(u.registrationDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))
-                    : new Date().toLocaleDateString('en-GB');
+                  const isBetLocked = Array.isArray(u.disabledGames) && u.disabledGames.length > 0;
+                  const creditRef = Number((u as any).creditReference) || 50000;
+                  const bal = Number(u.walletBalance) || 0;
+                  const pendingBal = bal - creditRef;
+                  const exposureVal = Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0);
+                  const availableBal = Math.max(0, bal - Math.abs(exposureVal));
+                  const uBet = Number(u.totalBet || 0);
+                  const uWin = Number(u.totalWin || 0);
+                  const pnl = (u as any).netProfitLoss !== undefined ? Number((u as any).netProfitLoss) : (uWin - uBet);
 
                   return (
-                    <tr key={u.uid || idx} className="hover:bg-[#181a28] transition-colors">
-                      <td className="py-3.5 px-3 font-medium text-slate-200">
-                        {u.uid}
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-white">
-                        {u.username || `User_${u.uid}`}
-                      </td>
-                      <td className="py-3.5 px-3 text-slate-200 font-medium text-xs">
-                        {displayPhone}
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-amber-400">
-                        ₹ {(Number(u.walletBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      {/* EXPOSURE (Clickable for full game-by-game breakdown) */}
-                      <td className="py-3.5 px-3 text-center">
-                        <button
-                          onClick={() => handleOpenExposureModal(u)}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 hover:border-rose-400 text-rose-400 font-mono font-bold text-xs transition cursor-pointer group shadow-sm"
-                          title="Click to view full game-by-game played amount & turnover breakdown"
+                    <tr
+                      key={u.uid || idx}
+                      className="hover:bg-[#f0f8fa] transition-colors border-b border-slate-200 text-slate-700 text-xs whitespace-nowrap"
+                    >
+                      {/* 1. UID (Placed before User Name) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <span
+                          onClick={() => {
+                            if (onViewUserDetails) {
+                              onViewUserDetails(u.uid);
+                            } else {
+                              setSelectedUser(u);
+                            }
+                          }}
+                          className="font-mono text-xs font-bold text-teal-800 hover:text-teal-600 hover:underline cursor-pointer bg-slate-100 hover:bg-teal-50 px-2 py-0.5 rounded border border-slate-200 inline-block"
+                          title="Click to view client details"
                         >
-                          <span className="group-hover:underline">
-                            (₹ {(Number(u.exposure !== undefined ? u.exposure : u.activeExposure || 0)).toFixed(2)})
+                          {u.uid}
+                        </span>
+                      </td>
+
+                      {/* 2. User Name with [C] Green badge */}
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="w-4 h-4 rounded bg-[#10b981] text-white flex items-center justify-center font-black text-[10px] shrink-0"
+                            title="Client Account"
+                          >
+                            C
                           </span>
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 font-sans font-semibold">
-                            📊
+                          <span
+                            onClick={() => {
+                              if (onViewUserDetails) {
+                                onViewUserDetails(u.uid);
+                              } else {
+                                setSelectedUser(u);
+                              }
+                            }}
+                            className="font-semibold text-slate-800 hover:text-teal-700 hover:underline cursor-pointer font-mono"
+                          >
+                            {u.username || u.uid}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 3. Phone Number & UPI (Replaces Credit Reference) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-center font-mono font-semibold text-slate-700">
+                        <div>{u.phone || (u as any).phoneNumber || (u as any).mobile || '-'}</div>
+                        {((u as any).upiId || (Array.isArray((u as any).bankAccounts) && (u as any).bankAccounts[0]?.upiId)) && (
+                          <div
+                            className="text-[10px] text-teal-700 font-sans font-medium bg-teal-50 border border-teal-200/60 px-1 py-0.5 rounded mt-0.5 max-w-[130px] mx-auto truncate"
+                            title={`UPI: ${(u as any).upiId || (u as any).bankAccounts[0]?.upiId}`}
+                          >
+                            {(u as any).upiId || (u as any).bankAccounts[0]?.upiId}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 3. Balance (Green bold font) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-right font-mono font-bold text-[#059669]">
+                        {bal.toFixed(2)}
+                      </td>
+
+                      {/* 4. Pending Bal. (Red if negative, Green if positive) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-right font-mono font-bold">
+                        {pendingBal < 0 ? (
+                          <span className="text-[#dc2626]">-{Math.abs(pendingBal).toFixed(2)}</span>
+                        ) : (
+                          <span className="text-[#059669]">{pendingBal.toFixed(2)}</span>
+                        )}
+                      </td>
+
+                      {/* 5. Available Bal. (Green bold font) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-right font-mono font-bold text-[#059669]">
+                        {availableBal.toFixed(2)}
+                      </td>
+
+                      {/* 6. Current P&L (Green if client in +, Red if client in -) */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-center font-mono">
+                        {pnl > 0 ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded bg-[#d1fae5] border border-[#34d399] text-[#065f46] font-black text-xs shadow-xs">
+                            +{pnl.toFixed(2)}
+                          </span>
+                        ) : pnl < 0 ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded bg-[#fee2e2] border border-[#f87171] text-[#b91c1c] font-black text-xs shadow-xs">
+                            {pnl.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-600 font-bold text-xs">
+                            0.00
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 7. Exposure */}
+                      <td
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleOpenExposureModal(u);
+                        }}
+                        className="py-2.5 px-3 border-r border-slate-200 text-right font-mono font-semibold cursor-pointer hover:bg-rose-50/70 select-none group"
+                        title="Click to view bets & active exposure breakdown"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleOpenExposureModal(u);
+                          }}
+                          className={`cursor-pointer font-bold inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-all shadow-xs ${
+                            exposureVal > 0
+                              ? 'text-rose-700 bg-rose-100 hover:bg-rose-200 border border-rose-300'
+                              : 'text-slate-700 bg-slate-100 hover:bg-teal-50 border border-slate-300 hover:border-teal-400 hover:text-teal-800'
+                          }`}
+                        >
+                          <span>{exposureVal > 0 ? `(${exposureVal.toFixed(2)})` : exposureVal.toFixed(2)}</span>
+                          <span className="text-[10px] text-teal-600 font-sans font-medium group-hover:underline">
+                            View ▾
                           </span>
                         </button>
                       </td>
-                      <td className="py-3.5 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
-                            !isBlocked
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}
-                        >
-                          {!isBlocked ? 'Active' : 'Blocked'}
-                        </span>
+
+                      {/* 8. U Lock (User Account Lock Checkbox) */}
+                      <td className="py-2.5 px-2 border-r border-slate-200 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isBlocked}
+                          onChange={() => handleToggleBlock(u)}
+                          className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-[#004d5a]"
+                          title={isBlocked ? 'Account is LOCKED (Click to Unlock)' : 'Account is UNLOCKED (Click to Lock)'}
+                        />
                       </td>
-                      <td className="py-3.5 px-3 text-slate-400 text-xs">
-                        {displayDate}
+
+                      {/* 9. B Lock (Bet Lock Checkbox) */}
+                      <td className="py-2.5 px-2 border-r border-slate-200 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isBetLocked}
+                          onChange={() => handleToggleBetLock(u)}
+                          className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-[#004d5a]"
+                          title={isBetLocked ? 'Betting is LOCKED (Click to Unlock)' : 'Betting is UNLOCKED (Click to Lock)'}
+                        />
                       </td>
-                      {/* ACTIONS: Compact Square Badges (U, D|C, W, P, GC, CC) matching Image 2 */}
-                      <td className="py-3.5 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5 flex-nowrap">
-                          {/* 1. U (User Details) - Orange Square */}
+
+                      {/* 10. My % */}
+                      <td className="py-2.5 px-2 border-r border-slate-200 text-center font-mono text-slate-600">
+                        {(u as any).sharePercent || 0}%
+                      </td>
+
+                      {/* 11. Type */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-center text-slate-700 font-medium">
+                        Client
+                      </td>
+
+                      {/* 12. Actions: The exact colorful square badges (U, D|C, W, P, GC, CC, DEL) */}
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* U (User Profile) - Orange Square */}
                           <button
                             onClick={() => {
                               if (onViewUserDetails) {
@@ -681,13 +1099,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                                 setSelectedUser(u);
                               }
                             }}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#f97316] hover:bg-[#ea580c] text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
-                            title="User Details (U)"
+                            className="w-6 h-6 rounded bg-[#f97316] hover:bg-[#ea580c] text-white flex items-center justify-center font-black text-xs shadow-xs cursor-pointer"
+                            title="User Profile (U)"
                           >
                             U
                           </button>
 
-                          {/* 2. D|C (Deposit / Credit) - Green Square */}
+                          {/* D|C (Deposit / Credit) - Green Square */}
                           <button
                             onClick={() => {
                               setManualDepositUser(u);
@@ -695,15 +1113,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                               setManualDepUtr(`DEP-${Date.now().toString().slice(-6)}`);
                               setShowManualDepositModal(true);
                             }}
-                            className="h-7 px-1.5 sm:h-8 sm:px-2 rounded-md bg-[#15803d] hover:bg-[#16a34a] text-white flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer tracking-tighter"
-                            title="Deposit / Credit (D|C)"
+                            className="h-6 px-1 rounded bg-[#15803d] hover:bg-[#16a34a] text-white flex items-center justify-center font-black text-[10px] shadow-xs cursor-pointer tracking-tighter"
+                            title="Deposit / Credit Adjustment (D|C)"
                           >
                             <span className="text-[#38bdf8]">D</span>
                             <span className="text-[#ea580c] mx-0.5">|</span>
                             <span className="text-[#facc15]">C</span>
                           </button>
 
-                          {/* 3. W (Withdrawal) - Blue Square */}
+                          {/* W (Withdrawal) - Indigo Square */}
                           <button
                             onClick={() => {
                               setManualWithdrawUser(u);
@@ -711,13 +1129,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                               setManualWthUtr(`PAYOUT-${Date.now().toString().slice(-6)}`);
                               setShowManualWithdrawModal(true);
                             }}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#1d4ed8] hover:bg-[#2563eb] text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
-                            title="Withdrawal (W)"
+                            className="w-6 h-6 rounded bg-[#1d4ed8] hover:bg-[#2563eb] text-white flex items-center justify-center font-black text-xs shadow-xs cursor-pointer"
+                            title="Manual Withdrawal (W)"
                           >
                             W
                           </button>
 
-                          {/* 4. P (Password) - Yellow Square */}
+                          {/* P (Password) - Yellow Square */}
                           <button
                             onClick={() => {
                               setResetTargetUser(u);
@@ -725,41 +1143,41 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                               setResetSuccessData(null);
                               setShowResetPassModal(true);
                             }}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-[#facc15] hover:bg-[#eab308] text-black flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
-                            title="Change Password (P)"
+                            className="w-6 h-6 rounded bg-[#facc15] hover:bg-[#eab308] text-black flex items-center justify-center font-black text-xs shadow-xs cursor-pointer"
+                            title="Reset Password (P)"
                           >
                             P
                           </button>
 
-                          {/* 5. GC (Game Control) - Lilac/Pink Square */}
+                          {/* GC (Game Control) - Pink Square */}
                           <button
                             onClick={() => handleOpenGameControl(u)}
-                            className="h-7 px-1.5 sm:h-8 sm:px-2 rounded-md bg-[#e879f9] hover:bg-[#f472b6] text-black flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer relative"
+                            className="h-6 px-1 rounded bg-[#e879f9] hover:bg-[#f472b6] text-black flex items-center justify-center font-black text-[10px] shadow-xs cursor-pointer relative"
                             title="Game Control (GC) - Manage Allowed Games for this Client"
                           >
                             <span>GC</span>
-                            {Array.isArray(u.disabledGames) && u.disabledGames.length > 0 && (
-                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
-                                {u.disabledGames.length}
+                            {isBetLocked && (
+                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-600 text-white rounded-full text-[7px] flex items-center justify-center font-bold">
+                                !
                               </span>
                             )}
                           </button>
 
-                          {/* 6. CC (Casino Control / Client Status) - Lime Green Square */}
+                          {/* CC (Client Control) - Lime Green Square */}
                           <button
                             onClick={() => handleOpenClientControl(u)}
-                            className={`h-7 px-1.5 sm:h-8 sm:px-2 rounded-md ${
+                            className={`h-6 px-1 rounded ${
                               isBlocked ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-[#4ade80] hover:bg-[#22c55e] text-black'
-                            } flex items-center justify-center font-black text-[11px] sm:text-xs shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer`}
-                            title={`Client Status & Control (CC) - Currently ${!isBlocked ? 'Active' : 'Blocked'}`}
+                            } flex items-center justify-center font-black text-[10px] shadow-xs cursor-pointer`}
+                            title={`Client Control (CC) - Currently ${!isBlocked ? 'Active' : 'Blocked'}`}
                           >
                             CC
                           </button>
 
-                          {/* 7. DEL (Delete User ID) - Crimson Red Square */}
+                          {/* DEL (Delete User ID) - Crimson Red Square */}
                           <button
                             onClick={() => handleOpenDeleteModal(u)}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center font-black text-xs sm:text-[13px] shadow transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                            className="w-6 h-6 rounded bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center font-black text-xs shadow-xs cursor-pointer"
                             title="Delete User ID Permanently (DEL)"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -774,14 +1192,62 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
           </table>
         </div>
 
-        {/* Dynamic Pagination bar (20 rows per page) */}
-        <PaginationControl
-          currentPage={currentPage}
-          totalItems={filteredUsers.length}
-          pageSize={20}
-          onPageChange={setCurrentPage}
-          itemName="users"
-        />
+        {/* =====================================================================
+            PAGINATION FOOTER (Matching screenshot First, Prev, 1, Next, Last)
+        ===================================================================== */}
+        <div className="p-3 bg-[#fdfdfd] border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-600 gap-2">
+          <div>
+            Showing {filteredUsers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+            {Math.min(currentPage * pageSize, filteredUsers.length)} of {filteredUsers.length} entries
+          </div>
+
+          <div className="flex items-center gap-1 font-semibold text-xs">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 rounded bg-[#4ba3b1] hover:bg-[#3b8e9c] disabled:opacity-40 text-white transition cursor-pointer"
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 rounded bg-[#4ba3b1] hover:bg-[#3b8e9c] disabled:opacity-40 text-white transition cursor-pointer"
+            >
+              Prev
+            </button>
+
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pageNum = i + 1;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`px-3 py-1 rounded transition cursor-pointer font-bold ${
+                    currentPage === pageNum ? 'bg-black text-white' : 'bg-[#4ba3b1] hover:bg-[#3b8e9c] text-white'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 rounded bg-[#4ba3b1] hover:bg-[#3b8e9c] disabled:opacity-40 text-white transition cursor-pointer"
+            >
+              Next
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 rounded bg-[#4ba3b1] hover:bg-[#3b8e9c] disabled:opacity-40 text-white transition cursor-pointer"
+            >
+              Last
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ================= MODAL: QUICK USER PROFILE VIEW ================= */}
@@ -1393,23 +1859,23 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
       {/* 1. EXPOSURE & GAME PLAYED BREAKDOWN MODAL               */}
       {/* ======================================================== */}
       {showExposureModal && exposureUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-[#121422] border border-[#2b304c] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-[#121422] border border-[#2b304c] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto relative">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold text-lg">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 font-bold text-lg">
                   📊
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base sm:text-lg font-bold text-white">Client Exposure & Game Breakdown</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                    <h3 className="text-base sm:text-lg font-bold text-white">Client Exposure & Bets Breakdown</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
                       UID: {exposureUser.uid}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Player: <strong className="text-slate-200">{exposureUser.username}</strong> | Mobile: <strong className="text-slate-200">{exposureUser.phone || '---'}</strong>
+                    Client: <strong className="text-slate-200">{exposureUser.username}</strong> | Phone: <strong className="text-slate-200">{exposureUser.phone || (exposureUser as any).phoneNumber || '---'}</strong>
                   </p>
                 </div>
               </div>
@@ -1424,218 +1890,337 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
 
             {/* Modal Scrollable Body */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-              {exposureLoading ? (
-                <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="w-8 h-8 animate-spin text-rose-400" />
-                  <p className="text-sm font-semibold">Calculating game-by-game turnover & exposure...</p>
+              {exposureLoading && (
+                <div className="py-2 px-3 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-300 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span className="font-semibold text-xs">Syncing latest live round bets & exposure...</span>
                 </div>
-              ) : (
-                <>
-                  {/* Top 4 KPI Metrics */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
-                      <div className="text-[11px] text-slate-400 font-medium">Active Exposure (Open Bets)</div>
-                      <div className="text-lg sm:text-xl font-bold font-mono text-rose-400 mt-1">
-                        (₹ {(Number(exposureData?.activeExposure || exposureUser.exposure || 0)).toFixed(2)})
+              )}
+
+              {(() => {
+                const activeExposureVal = Number(exposureData?.activeExposure ?? exposureUser.exposure ?? 0);
+                const expTotalBet = Number(exposureData?.totalBet ?? exposureUser.totalBet ?? 0);
+                const expTotalWin = Number(exposureData?.totalWin ?? exposureUser.totalWin ?? 0);
+                const clientNetPnl = exposureData?.netProfitLoss !== undefined 
+                  ? Number(exposureData.netProfitLoss) 
+                  : (expTotalWin - expTotalBet);
+                const isProfit = clientNetPnl > 0;
+                const isLoss = clientNetPnl < 0;
+
+                // Active open bets currently pending (active liabilities)
+                const activeBetsList = Array.isArray(exposureData?.activeBets) && exposureData.activeBets.length > 0
+                  ? exposureData.activeBets
+                  : (Array.isArray(exposureData?.recentBets)
+                      ? exposureData.recentBets.filter((b: any) => b.status === 'pending')
+                      : []);
+
+                // Filter games: ONLY show games where bets have been placed ("jisame bet laga rhega whi show kre")
+                const playedGames = ALL_AVAILABLE_GAMES.filter((game) => {
+                  const bData = exposureData?.gameBreakdown?.[game.key];
+                  return bData && (bData.totalBet > 0 || bData.rounds > 0 || bData.totalWin > 0);
+                });
+
+                // Recent bets placed log
+                const recentBetsList = Array.isArray(exposureData?.recentBets)
+                  ? exposureData.recentBets.filter((b: any) => Number(b.totalAmount || b.amount || 0) > 0)
+                  : [];
+
+                return (
+                  <>
+                    {/* Top 4 KPI Metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {/* 1. Active Exposure */}
+                      <div className={`rounded-xl p-3 border ${activeExposureVal > 0 ? 'bg-rose-950/30 border-rose-500/40' : 'bg-[#181a2e] border-[#2b304c]'}`}>
+                        <div className="text-[11px] text-slate-400 font-medium">Active Exposure (Open Bets)</div>
+                        <div className={`text-lg sm:text-xl font-bold font-mono mt-1 ${activeExposureVal > 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                          {activeExposureVal > 0 ? `(₹ ${activeExposureVal.toFixed(2)})` : '₹ 0.00'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {activeExposureVal > 0 ? 'Pending round liabilities' : 'No open liabilities'}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Current pending liabilities</div>
+
+                      {/* 2. Total Game Turnover */}
+                      <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                        <div className="text-[11px] text-slate-400 font-medium">Total Game Turnover (Stake)</div>
+                        <div className="text-lg sm:text-xl font-bold font-mono text-amber-400 mt-1">
+                          ₹ {expTotalBet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">All-time total stakes played</div>
+                      </div>
+
+                      {/* 3. Total Client Winnings */}
+                      <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
+                        <div className="text-[11px] text-slate-400 font-medium">Total Client Winnings</div>
+                        <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400 mt-1">
+                          ₹ {expTotalWin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">Gross won amount</div>
+                      </div>
+
+                      {/* 4. Current Profit / Loss (Green if client in +, Red if client in -) */}
+                      <div className={`rounded-xl p-3 border ${
+                        isProfit 
+                          ? 'bg-emerald-950/40 border-emerald-500/50' 
+                          : isLoss 
+                            ? 'bg-rose-950/40 border-rose-500/50' 
+                            : 'bg-[#181a2e] border-[#2b304c]'
+                      }`}>
+                        <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between">
+                          <span>Current Profit / Loss</span>
+                          {isProfit && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Client +
+                            </span>
+                          )}
+                          {isLoss && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              Client -
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-lg sm:text-xl font-bold font-mono mt-1 ${
+                          isProfit ? 'text-emerald-400' : isLoss ? 'text-rose-400' : 'text-slate-300'
+                        }`}>
+                          {isProfit ? `+₹ ${clientNetPnl.toFixed(2)}` : isLoss ? `-₹ ${Math.abs(clientNetPnl).toFixed(2)}` : '₹ 0.00'}
+                        </div>
+                        <div className="text-[10px] mt-0.5">
+                          {isProfit ? (
+                            <span className="text-emerald-400 font-medium">Client is in PROFIT (Green)</span>
+                          ) : isLoss ? (
+                            <span className="text-rose-400 font-medium">Client is in LOSS (Red)</span>
+                          ) : (
+                            <span className="text-slate-500">Break-even (₹0.00)</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
-                      <div className="text-[11px] text-slate-400 font-medium">Total Game Turnover</div>
-                      <div className="text-lg sm:text-xl font-bold font-mono text-amber-400 mt-1">
-                        ₹ {(Number(exposureData?.totalBet || exposureUser.totalBet || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">All-time stakes played</div>
-                    </div>
-
-                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
-                      <div className="text-[11px] text-slate-400 font-medium">Total User Winnings</div>
-                      <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400 mt-1">
-                        ₹ {(Number(exposureData?.totalWin || exposureUser.totalWin || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Gross won amount</div>
-                    </div>
-
-                    <div className="bg-[#181a2e] border border-[#2b304c] rounded-xl p-3">
-                      <div className="text-[11px] text-slate-400 font-medium">Player Net P&L</div>
-                      {(() => {
-                        const net = (Number(exposureData?.totalWin || 0)) - (Number(exposureData?.totalBet || 0));
-                        return (
-                          <div className={`text-lg sm:text-xl font-bold font-mono mt-1 ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {net >= 0 ? `+₹ ${net.toFixed(2)}` : `-₹ ${Math.abs(net).toFixed(2)}`}
+                    {/* Section: ACTIVE OPEN BETS (Current Exposure) */}
+                    {activeBetsList.length > 0 && (
+                      <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                            <span className="text-sm font-bold text-rose-300">
+                              Active Open Bets / Current Exposure ({activeBetsList.length})
+                            </span>
                           </div>
-                        );
-                      })()}
-                      <div className="text-[10px] text-slate-500 mt-0.5">Player win vs stake</div>
-                    </div>
-                  </div>
+                          <span className="text-xs font-mono font-bold text-rose-400">
+                            Total Exposure: ₹ {activeExposureVal.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-[#2b304c] bg-[#141628]">
+                          <table className="w-full text-left text-xs font-mono">
+                            <thead>
+                              <tr className="border-b border-[#23273c] text-[10px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
+                                <th className="py-2 px-3">Time</th>
+                                <th className="py-2 px-3">Game</th>
+                                <th className="py-2 px-3">Period / Round</th>
+                                <th className="py-2 px-3">Selection / Bet</th>
+                                <th className="py-2 px-3 text-right">Stake Amount</th>
+                                <th className="py-2 px-3 text-center">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#1e2238]">
+                              {activeBetsList.map((bet: any, idx: number) => {
+                                const bDate = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-IN') : 'Just now';
+                                return (
+                                  <tr key={bet.id || idx} className="hover:bg-[#181b30] transition text-[11px]">
+                                    <td className="py-2 px-3 text-slate-400">{bDate}</td>
+                                    <td className="py-2 px-3 font-sans font-bold text-white capitalize">
+                                      {String(bet.gameType || 'Game').replace(/_/g, ' ')}
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-300">#{bet.periodId || bet.roundId || '---'}</td>
+                                    <td className="py-2 px-3 font-bold text-cyan-300">
+                                      {bet.selectType || bet.choice || bet.betType || bet.number || 'Standard Bet'}
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-bold text-rose-400">
+                                      ₹ {(Number(bet.totalAmount || bet.amount || 0)).toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                        ACTIVE EXPOSURE
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
 
-                  {/* Section: Game-by-Game Played Breakdown */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white">Played Amount by Game (Kaun Se Game Me Kitna Khela Hai)</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1e2238] text-slate-300">
-                          {ALL_AVAILABLE_GAMES.length} Games Tracked
+                    {/* Section: PLAYED GAMES BREAKDOWN (ONLY SHOW GAMES WHERE BET WAS PLACED) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">Games With Placed Bets (जिस गेम में बेट लगा हुआ है)</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                            {playedGames.length} Played Games
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                          (Unplayed games with ₹0.00 are hidden)
                         </span>
                       </div>
-                      <button
-                        onClick={() => {
-                          setShowExposureModal(false);
-                          handleOpenGameControl(exposureUser);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-[#e879f9]/20 hover:bg-[#e879f9]/30 text-[#e879f9] border border-[#e879f9]/30 font-bold text-xs flex items-center gap-1.5 transition"
-                      >
-                        <span>Manage in GC</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628]">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="border-b border-[#23273c] text-[11px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
-                            <th className="py-2.5 px-3">Game Name</th>
-                            <th className="py-2.5 px-3">Category</th>
-                            <th className="py-2.5 px-3 text-right">Rounds</th>
-                            <th className="py-2.5 px-3 text-right">Total Bet (Stake)</th>
-                            <th className="py-2.5 px-3 text-right">Total Won</th>
-                            <th className="py-2.5 px-3 text-right">Player Net P&L</th>
-                            <th className="py-2.5 px-3 text-center">GC Access</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1e2238]">
-                          {ALL_AVAILABLE_GAMES.map((game) => {
-                            const bData = exposureData?.gameBreakdown?.[game.key] || { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
-                            const isGameBlocked = Array.isArray(exposureUser.disabledGames) && exposureUser.disabledGames.includes(game.key);
-                            const hasPlayed = bData.totalBet > 0 || bData.rounds > 0;
-
-                            return (
-                              <tr key={game.key} className={`hover:bg-[#181b30] transition ${hasPlayed ? 'bg-[#181a2e]/40 font-medium' : 'opacity-70'}`}>
-                                <td className="py-2.5 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-base">{game.icon}</span>
-                                    <div>
-                                      <div className="font-bold text-white">{game.name}</div>
-                                      <div className="text-[10px] text-slate-400">{game.tag}</div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-300">
-                                  <span className="px-2 py-0.5 rounded-md bg-[#1f233b] text-[10px] text-slate-300">
-                                    {game.category}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono text-slate-200">
-                                  {bData.rounds > 0 ? (
-                                    <span className="font-bold text-white">{bData.rounds}</span>
-                                  ) : (
-                                    <span className="text-slate-500">0</span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono">
-                                  {bData.totalBet > 0 ? (
-                                    <span className="font-bold text-amber-400">
-                                      ₹ {bData.totalBet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-500">₹ 0.00</span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono">
-                                  {bData.totalWin > 0 ? (
-                                    <span className="font-bold text-emerald-400">
-                                      ₹ {bData.totalWin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-500">₹ 0.00</span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono">
-                                  {hasPlayed ? (
-                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                      bData.netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                                    }`}>
-                                      {bData.netProfit >= 0 ? `+₹${bData.netProfit.toFixed(2)}` : `-₹${Math.abs(bData.netProfit).toFixed(2)}`}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-500">--</span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-center">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    !isGameBlocked
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                  }`}>
-                                    {!isGameBlocked ? 'Allowed' : 'Blocked'}
-                                  </span>
-                                </td>
+                      {playedGames.length === 0 ? (
+                        <div className="py-8 px-4 text-center rounded-xl border border-[#2b304c] bg-[#141628] text-slate-400">
+                          <p className="font-semibold text-slate-300">No bets placed on any games yet</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Client has not placed wagers in any game categories yet. Exposure is ₹0.00.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628]">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-[#23273c] text-[11px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
+                                <th className="py-2.5 px-3">Game Name</th>
+                                <th className="py-2.5 px-3">Category</th>
+                                <th className="py-2.5 px-3 text-right">Rounds Played</th>
+                                <th className="py-2.5 px-3 text-right">Total Bet (Stake)</th>
+                                <th className="py-2.5 px-3 text-right">Total Won</th>
+                                <th className="py-2.5 px-3 text-right">Client Net P&L</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                            </thead>
+                            <tbody className="divide-y divide-[#1e2238]">
+                              {playedGames.map((game) => {
+                                const bData = exposureData?.gameBreakdown?.[game.key] || { totalBet: 0, totalWin: 0, rounds: 0, netProfit: 0 };
+                                const gamePnl = bData.netProfit;
+                                const isGameProfit = gamePnl > 0;
+                                const isGameLoss = gamePnl < 0;
 
-                  {/* Section: Recent Bets Table */}
-                  {Array.isArray(exposureData?.recentBets) && exposureData.recentBets.length > 0 && (
-                    <div>
-                      <div className="text-sm font-bold text-white mb-2">Recent Game Activity Log ({exposureData.recentBets.length} Bets)</div>
-                      <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628] max-h-60">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="border-b border-[#23273c] text-[10px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
-                              <th className="py-2 px-3">Time</th>
-                              <th className="py-2 px-3">Game</th>
-                              <th className="py-2 px-3">Period / Round</th>
-                              <th className="py-2 px-3 text-right">Stake Amount</th>
-                              <th className="py-2 px-3 text-center">Status</th>
-                              <th className="py-2 px-3 text-right">Win / Payout</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[#1e2238] font-mono">
-                            {exposureData.recentBets.slice(0, 15).map((bet: any, bIdx: number) => {
-                              const isWon = bet.status === 'won';
-                              const bDate = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-IN') : '---';
-                              return (
-                                <tr key={bet.id || bIdx} className="hover:bg-[#181b30] transition text-[11px]">
-                                  <td className="py-2 px-3 text-slate-400">{bDate}</td>
-                                  <td className="py-2 px-3 font-sans font-bold text-white capitalize">
-                                    {String(bet.gameType || 'Game').replace(/_/g, ' ')}
-                                  </td>
-                                  <td className="py-2 px-3 text-slate-300">#{bet.periodId}</td>
-                                  <td className="py-2 px-3 text-right font-bold text-amber-400">
-                                    ₹ {(Number(bet.totalAmount || bet.amount || 0)).toFixed(2)}
-                                  </td>
-                                  <td className="py-2 px-3 text-center">
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      isWon ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
-                                    }`}>
-                                      {bet.status?.toUpperCase() || 'COMPLETED'}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-bold text-emerald-400">
-                                    {isWon ? `₹ ${(Number(bet.winAmount || 0)).toFixed(2)}` : '₹ 0.00'}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                return (
+                                  <tr key={game.key} className="hover:bg-[#181b30] transition bg-[#181a2e]/40 font-medium">
+                                    <td className="py-2.5 px-3">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base">{game.icon}</span>
+                                        <div>
+                                          <div className="font-bold text-white">{game.name}</div>
+                                          <div className="text-[10px] text-slate-400">{game.tag}</div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-slate-300">
+                                      <span className="px-2 py-0.5 rounded-md bg-[#1f233b] text-[10px] text-slate-300">
+                                        {game.category}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
+                                      {bData.rounds}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-400">
+                                      ₹ {bData.totalBet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">
+                                      ₹ {bData.totalWin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono">
+                                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                        isGameProfit
+                                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                          : isGameLoss
+                                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                            : 'bg-slate-700/40 text-slate-300 border border-slate-600'
+                                      }`}>
+                                        {isGameProfit ? `+₹${gamePnl.toFixed(2)}` : isGameLoss ? `-₹${Math.abs(gamePnl).toFixed(2)}` : '₹0.00'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </>
-              )}
+
+                    {/* Section: RECENT PLACED BETS ACTIVITY LOG */}
+                    {recentBetsList.length > 0 && (
+                      <div>
+                        <div className="text-sm font-bold text-white mb-2 flex items-center justify-between">
+                          <span>Recent Placed Bets Activity Log ({recentBetsList.length} Bets)</span>
+                          <span className="text-[10px] text-slate-400 font-normal">Shows individual settled and pending bets</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-[#2b304c] bg-[#141628] max-h-64">
+                          <table className="w-full text-left text-xs font-mono">
+                            <thead>
+                              <tr className="border-b border-[#23273c] text-[10px] text-slate-400 font-semibold uppercase bg-[#181a2e]">
+                                <th className="py-2 px-3">Time</th>
+                                <th className="py-2 px-3">Game</th>
+                                <th className="py-2 px-3">Period / Round</th>
+                                <th className="py-2 px-3">Selection</th>
+                                <th className="py-2 px-3 text-right">Stake Amount</th>
+                                <th className="py-2 px-3 text-center">Status</th>
+                                <th className="py-2 px-3 text-right">Win Payout</th>
+                                <th className="py-2 px-3 text-right">Client P&L</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#1e2238]">
+                              {recentBetsList.slice(0, 30).map((bet: any, bIdx: number) => {
+                                const isWon = bet.status === 'won';
+                                const isPending = bet.status === 'pending';
+                                const bDate = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-IN') : '---';
+                                const stakeAmt = Number(bet.totalAmount || bet.amount || 0);
+                                const winAmt = Number(bet.winAmount || 0);
+                                const betPnl = isWon ? (winAmt - stakeAmt) : (isPending ? 0 : -stakeAmt);
+
+                                return (
+                                  <tr key={bet.id || bIdx} className="hover:bg-[#181b30] transition text-[11px]">
+                                    <td className="py-2 px-3 text-slate-400">{bDate}</td>
+                                    <td className="py-2 px-3 font-sans font-bold text-white capitalize">
+                                      {String(bet.gameType || 'Game').replace(/_/g, ' ')}
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-300">#{bet.periodId || bet.roundId || '---'}</td>
+                                    <td className="py-2 px-3 font-sans text-cyan-300 font-medium">
+                                      {bet.selectType || bet.choice || bet.betType || bet.number || 'Bet'}
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-bold text-amber-400">
+                                      ₹ {stakeAmt.toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        isWon 
+                                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                                          : isPending
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                      }`}>
+                                        {bet.status?.toUpperCase() || 'COMPLETED'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-bold text-emerald-400">
+                                      {isWon ? `₹ ${winAmt.toFixed(2)}` : '₹ 0.00'}
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-bold">
+                                      {isWon ? (
+                                        <span className="text-emerald-400">+₹{betPnl.toFixed(2)}</span>
+                                      ) : isPending ? (
+                                        <span className="text-amber-400">Pending</span>
+                                      ) : (
+                                        <span className="text-rose-400">-₹{Math.abs(betPnl).toFixed(2)}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
             <div className="p-4 border-t border-[#23273c] flex items-center justify-between bg-[#16192b]/80">
               <span className="text-xs text-slate-400">
-                Exposure data is computed real-time from settled & active round wagers.
+                Exposure & P&L are accurately computed from active pending wagers and settled game results.
               </span>
               <button
                 onClick={() => setShowExposureModal(false)}

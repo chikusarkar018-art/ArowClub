@@ -534,7 +534,9 @@ class ApiService {
       activeExposure: number;
       totalBet: number;
       totalWin: number;
+      netProfitLoss?: number;
       gameBreakdown: Record<string, { totalBet: number; totalWin: number; rounds: number; netProfit: number }>;
+      activeBets?: any[];
       recentBets: any[];
     }>(`/api/admin/users/${uid}/exposure`);
   }
@@ -1031,6 +1033,18 @@ class ApiService {
     return this.request('/api/admin/game-house-rules/single', {
       method: 'POST',
       body: JSON.stringify({ rule, adminUsername }),
+    });
+  }
+
+  async setAdminGameResult(gameType: string, periodId: string, result: { number: number; color?: string; size?: string }, adminUsername?: string) {
+    return this.request('/api/admin/game/set-result', {
+      method: 'POST',
+      body: JSON.stringify({
+        gameType,
+        periodId,
+        manualResultNumber: result.number,
+        adminUsername,
+      }),
     });
   }
 

@@ -4401,15 +4401,30 @@ Assistant Reply:`;
         gameBreakdown[key].netProfit = parseFloat((gameBreakdown[key].totalWin - gameBreakdown[key].totalBet).toFixed(2));
       }
 
+      let computedTotalBet = 0;
+      let computedTotalWin = 0;
+      Object.values(gameBreakdown).forEach(g => {
+        computedTotalBet += g.totalBet;
+        computedTotalWin += g.totalWin;
+      });
+      const finalTotalBet = parseFloat(Math.max(Number(u.totalBet || 0), Number(uVip.totalBet || 0), computedTotalBet).toFixed(2));
+      const finalTotalWin = parseFloat(Math.max(Number(u.totalWin || 0), Number(uVip.totalWin || 0), computedTotalWin).toFixed(2));
+      const effectiveExposure = activeExposure > 0 ? activeExposure : (Number((u as any).exposure) || 0);
+
       return {
         ...uVip,
+        bankAccounts: u.bankAccounts || [],
+        upiId: (u as any).upiId || (u.bankAccounts && u.bankAccounts[0]?.upiId) || '',
         completedTurnover,
         requiredTurnover,
         remainingTurnover,
         rolloverProgress,
         isRolloverCompleted,
-        exposure: activeExposure,
-        activeExposure,
+        exposure: effectiveExposure,
+        activeExposure: effectiveExposure,
+        totalBet: finalTotalBet,
+        totalWin: finalTotalWin,
+        netProfitLoss: parseFloat((finalTotalWin - finalTotalBet).toFixed(2)),
         disabledGames: Array.isArray(u.disabledGames) ? u.disabledGames : [],
         gameBreakdown,
       };
@@ -4417,12 +4432,22 @@ Assistant Reply:`;
 
     if (search && String(search).trim() && String(search).trim().toLowerCase() !== 'all') {
       const q = String(search).trim().toLowerCase();
-      list = list.filter(u => 
-        (u.uid && u.uid.toLowerCase().includes(q)) || 
-        (u.username && u.username.toLowerCase().includes(q)) || 
-        (u.phone && u.phone.includes(q)) ||
-        (u.email && u.email.toLowerCase().includes(q))
-      );
+      list = list.filter(u => {
+        const uidMatch = u.uid && u.uid.toLowerCase().includes(q);
+        const userMatch = u.username && u.username.toLowerCase().includes(q);
+        const phoneMatch = (u.phone && String(u.phone).toLowerCase().includes(q)) || 
+                           ((u as any).phoneNumber && String((u as any).phoneNumber).toLowerCase().includes(q)) ||
+                           ((u as any).mobile && String((u as any).mobile).toLowerCase().includes(q));
+        const emailMatch = u.email && u.email.toLowerCase().includes(q);
+        const upiMatch = ((u as any).upiId && String((u as any).upiId).toLowerCase().includes(q)) ||
+          (((u as any).bankAccounts || []).some((b: any) => 
+            (b.upiId && String(b.upiId).toLowerCase().includes(q)) ||
+            (b.accountNumber && String(b.accountNumber).toLowerCase().includes(q)) ||
+            (b.accountHolder && String(b.accountHolder).toLowerCase().includes(q)) ||
+            (b.bankName && String(b.bankName).toLowerCase().includes(q))
+          ));
+        return uidMatch || userMatch || phoneMatch || emailMatch || upiMatch;
+      });
     }
 
     if (status && status !== 'all') {
@@ -4547,17 +4572,31 @@ Assistant Reply:`;
       gameBreakdown[key].netProfit = parseFloat((gameBreakdown[key].totalWin - gameBreakdown[key].totalBet).toFixed(2));
     }
 
+    let computedTotalBet = 0;
+    let computedTotalWin = 0;
+    Object.values(gameBreakdown).forEach(g => {
+      computedTotalBet += g.totalBet;
+      computedTotalWin += g.totalWin;
+    });
+    const finalTotalBet = parseFloat(Math.max(Number(user.totalBet || 0), computedTotalBet).toFixed(2));
+    const finalTotalWin = parseFloat(Math.max(Number(user.totalWin || 0), computedTotalWin).toFixed(2));
+    const effectiveExposure = activeExposure > 0 ? activeExposure : (Number((user as any).exposure) || 0);
+    const netProfitLoss = parseFloat((finalTotalWin - finalTotalBet).toFixed(2));
+    const activeBets = userBets.filter(b => b.status === 'pending');
+
     return res.json({
       success: true,
       uid: user.uid,
       username: user.username,
-      walletBalance: user.walletBalance,
-      exposure: activeExposure,
-      activeExposure,
-      totalBet: user.totalBet || 0,
-      totalWin: user.totalWin || 0,
+      walletBalance: Number(user.walletBalance || 0),
+      exposure: effectiveExposure,
+      activeExposure: effectiveExposure,
+      totalBet: finalTotalBet,
+      totalWin: finalTotalWin,
+      netProfitLoss,
       gameBreakdown,
-      recentBets: userBets.slice(0, 30),
+      activeBets,
+      recentBets: userBets.slice(0, 50),
     });
   });
 
