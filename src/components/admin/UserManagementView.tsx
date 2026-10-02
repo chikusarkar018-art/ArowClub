@@ -115,6 +115,25 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
   const [quickDeleteUidInput, setQuickDeleteUidInput] = useState('');
   const [quickDeleteSearchResult, setQuickDeleteSearchResult] = useState<AdminUserSummary | null>(null);
 
+  // Clear All Users Modal
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [clearingAllUsers, setClearingAllUsers] = useState(false);
+
+  const handleConfirmClearAllUsers = async () => {
+    setClearingAllUsers(true);
+    try {
+      const res = await api.adminDeleteAllUsers(admin?.username);
+      setUsers([]);
+      setShowClearAllModal(false);
+      showToast(res.message || 'All client IDs removed successfully', 'success');
+      fetchUsers(false);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove all IDs', 'error');
+    } finally {
+      setClearingAllUsers(false);
+    }
+  };
+
   // Radhe Exchange Client List State
   const [searchUidInput, setSearchUidInput] = useState('');
   const [pageSize, setPageSize] = useState<number>(25);
@@ -763,6 +782,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete UID</span>
+            </button>
+
+            {/* Remove All IDs button */}
+            <button
+              onClick={() => setShowClearAllModal(true)}
+              className="px-2.5 py-1 rounded bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+              title="Remove All Client Accounts (सभी आईडी हटाएं)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove All IDs</span>
             </button>
           </div>
         </div>
@@ -2739,6 +2768,64 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ initialS
                 Type exact UID or click Find to verify user details before deleting.
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* CLEAR ALL USER IDS MODAL                                */}
+      {/* ======================================================== */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-[#121422] border border-rose-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center mx-auto text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-white">Remove All Client IDs?</h3>
+              <p className="text-xs text-rose-300 font-medium">
+                (क्या आप सिस्टम से सभी यूजर आईडी और अकाउंट्स हटाना चाहते हैं?)
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed pt-1">
+                This will permanently delete all registered user accounts, their placed bets, transactions, and exposures from the database and storage.
+              </p>
+            </div>
+
+            <div className="p-3 bg-rose-950/30 rounded-xl border border-rose-500/20 text-center">
+              <span className="text-xs font-mono font-bold text-rose-300">
+                Total Clients to Remove: {users.length}
+              </span>
+            </div>
+
+            <div className="flex gap-2.5 justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={clearingAllUsers}
+                onClick={() => setShowClearAllModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearingAllUsers}
+                onClick={handleConfirmClearAllUsers}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 flex items-center gap-2"
+              >
+                {clearingAllUsers ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removing All...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm & Remove All</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

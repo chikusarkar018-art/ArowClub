@@ -1268,6 +1268,27 @@ export class WingoDatabase {
     await deleteUserPermanently(uidStr);
   }
 
+  // Delete all users permanently (Admin action to wipe all registered client IDs)
+  public async clearAllUsers(): Promise<number> {
+    const allUsers = Array.from(this.users.values());
+    const count = allUsers.length;
+    const uidsToDelete = allUsers.map(u => String(u.uid || u.id).replace(/^u-/, ''));
+
+    this.users.clear();
+    this.bets = [];
+    this.transactions = [];
+    this.deposits = [];
+    this.withdrawals = [];
+    this.referrals = [];
+    this.referralDepositCommissions = [];
+    this.saveToDisk(false);
+
+    for (const uid of uidsToDelete) {
+      await deleteUserPermanently(uid).catch(() => {});
+    }
+    return count;
+  }
+
   // Add an entry to Google Sheet Deposit Ledger upon Admin Approval
   public addGoogleSheetDeposit(deposit: any, accountDetails?: string, platform?: string, bonusAmount?: number) {
     const d = new Date();

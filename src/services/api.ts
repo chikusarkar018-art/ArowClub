@@ -562,6 +562,13 @@ class ApiService {
     });
   }
 
+  async adminDeleteAllUsers(adminUsername?: string) {
+    return this.request<{ success: boolean; message: string; deletedCount: number }>('/api/admin/users/delete-all', {
+      method: 'POST',
+      body: JSON.stringify({ adminUsername }),
+    });
+  }
+
   async getAdminUserDetails(uid: string) {
     return this.request(`/api/admin/users/${uid}`);
   }

@@ -4770,6 +4770,28 @@ Assistant Reply:`;
     return res.json({ success: true, message: `User UID ${uid} deleted successfully` });
   });
 
+  // Admin Delete All Users (Wipe all client IDs permanently)
+  app.post('/api/admin/users/delete-all', async (req, res) => {
+    const { adminUsername } = req.body;
+    const deletedCount = await db.clearAllUsers();
+
+    logAdminAction(
+      adminUsername || 'SuperAdmin',
+      'Wipe All Client IDs',
+      `Admin cleared all registered client IDs (${deletedCount} accounts deleted permanently)`,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `All ${deletedCount} client accounts have been deleted successfully. System is fresh with 0 user IDs.`,
+      deletedCount
+    });
+  });
+
   app.get('/api/admin/users/:uid', (req, res) => {
     const { uid } = req.params;
     const user = db.users.get(uid);
